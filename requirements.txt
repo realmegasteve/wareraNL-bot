@@ -1,0 +1,4 @@
+aiohttp
+aiosqlite
+discord.py==2.6.4
+python-dotenv
