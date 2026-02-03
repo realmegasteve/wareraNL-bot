@@ -1,0 +1,83 @@
+{
+  "embeds": [
+    {
+      "title": "📚 Beknopte Beginner Handleiding",
+      "description": "Deze beknopte beginners handleiding geeft jou net genoeg informatie over jouw eerste stappen in het spel.\n\n@Darkodor heeft een uitgebreide handleiding geschreven in:\n• economie\n• levels-xp-en-missies\n• oorlog\n\n**Warera** is een strategiespel. Het doel is om zo groot en sterk mogelijk te worden als Nederland door oorlog te voeren en gebieden te veroveren.",
+      "color": "primary"
+    },
+    {
+      "title": "📊 Basis Kennis",
+      "description": "Je verdient **XP / levels** door missies te voltooien. Door een hoger level te behalen krijg je **skill points**.\n\n**💡 Belangrijk:** Investeer je skill points in economische skills!\nHoe hoger level de skill, hoe meer skill points het kost.\n\nVoor de eco skills, is dit de optimale spreiding: zie economie\n(Je kan je skill points bekijken via: profiel → skills)",
+      "color": "primary"
+    },
+    {
+      "title": "🔥 VOLTOOI JE MISSIES 🔥",
+      "description": "De **enige manier** waarop je XP / levels verdient is door je dagelijkse / wekelijkse / Starting missies te voltooien.\n\n**Meer XP = Meer Levels = Meer Skill Points = Snellere groei!**",
+      "color": "success"
+    },
+    {
+      "title": "📊 De Vier Balken",
+      "description": "**🟢 Health** - Dit gebruik je om aan te vallen\n**🔴 Hunger** - Door te eten krijg je health terug\n**🟣 Energie** - Dit gebruik je om voor een ander te werken\n**🟣 Entrepreneurship** - Dit gebruik je om in je eigen bedrijven te werken\n\n**Belangrijk:** Ieder uur worden de balken voor 1/10de gevuld.\nDit betekent dat iedere 10 uur deze weer vol zitten.",
+      "color": "primary",
+      "image": "https://cdn.discordapp.com/attachments/1457351757444419769/1457353057309294744/image0.jpg?ex=6981440d&is=697ff28d&hm=18b4ce7b25f2157ff3dd6eebb8682a228ecbfb6134cb652e2265ac4e2d3ee5af&"
+    },
+    {
+      "title": "🔥 DE 10-UUR REGEL 🔥",
+      "description": "Voor progressie en groei is het **cruciaal** dat je minstens **één keer per 10 uur** je balken weer leegmaakt!",
+      "color": "error"
+    },
+    {
+      "title": "🗡️ OORLOG 💣",
+      "description": "**Health** = aanvallen (groene balk)\n**Hunger** = health terugkrijgen (rode balk)\n\nVoor nu is oorlog belangrijk voor:\n• Het voltooien van missies\n• **Lootboxes** (5% kans per aanval)\n\nDoe mee aan gevechten en verzamel zoveel mogelijk lootboxes!\nJe kan je kans zien bij het groene klavertje 🍀\n\nMeer info: zie oorlog",
+      "color": "primary",
+      "image": "https://media.discordapp.net/attachments/1457351757444419769/1457354215830585354/Screenshot_20260104_134513_Chrome.jpg?ex=69814521&is=697ff3a1&hm=7809a2eda8ebb582e75633e364453165541f8171bd0ab1c1d6044e647713622c&=&format=webp"
+    },
+    {
+      "title": "💸 Economie // Geld Verdienen",
+      "description": "Je verdient geld door:\n1. **Werken voor een ander** (energie = paarse balk)\n2. **Werken in je eigen bedrijf** (entrepreneurship = roze balk)\n\n**Iedere klik kost 10 energie/entrepreneurship**\n\n",
+      "color": "primary",
+      "image": "https://cdn.discordapp.com/attachments/1457351757444419769/1457355321541394454/image.png?ex=69814629&is=697ff4a9&hm=d94013c0faa08e39b48369433202ec2a00201e356350daddfc8999995645a7dd&"
+    },
+    {
+        "title":"Production Points:",
+        "description": "\nDeze bepalen hoeveel je produceert of verdient.\nNormaal: 10 energie = 10 productiepunten\nUpgrade deze skill voor meer output!",
+        "image": "https://cdn.discordapp.com/attachments/1457351757444419769/1457355565855670364/image.png?ex=69814663&is=697ff4e3&hm=1f2bb1e9d55deca0a0003c98bb8cf495e649af532786162f329834e09a17af43&"
+    },
+    {
+      "title": "💰 Waar Geef Ik Mijn Geld Aan Uit?",
+      "description": "**Investeer je geld terug in je bedrijven!**\n\nDit doe je door:\n• Je bestaande bedrijf te upgraden (focus op **automated engine**)\n• Een nieuw bedrijf op te richten\n\nVoor de beste volgorde, zie: economie",
+      "color": "primary"
+    },
+    {
+      "title": "🏭 Bedrijven / Companies",
+      "description": "Bedrijven produceren grondstoffen:\n• **Basis grondstoffen** (bijv. ijzer)\n• **Geadvanceerde grondstoffen** (bijv. staal = 10 ijzer)\n\n**Prijzen** worden bepaald door vraag en aanbod.\nVraag aan @🤖rob-jetten🤖 welke grondstoffen het meeste opleveren!\n(typ `/help` voor alle commando's)\n\nMeer details: zie economie",
+      "color": "primary"
+    },
+    {
+      "title": "✅ Wat Wel Te Doen",
+      "description": "✅ Focus op de **economische skills**\n✅ Iedere **10 uur** je energie opmaken\n✅ Voltooi je **missies**\n✅ Doe mee aan gevechten voor **lootboxes**\n✅ Geld **investeren** in je bedrijven",
+      "color": "success"
+    },
+    {
+      "title": "❌ Wat Niet Te Doen",
+      "description": "❌ Gebruik **geen** equipment voor gevechten (verkoop het!)",
+      "color": "error"
+    },
+    {
+      "title": "💡 Handige Tips",
+      "description": "• **Referral bonus:** Vul een referral in voor 10 gratis coins (profiel → Referral)\n• **Verkoop je lootboxes** voor geld (bewaar een paar voor missies)\n• **Verkoop equipment** in plaats van gebruiken\n(Equipment is pas effectief met veel oorlog skills)",
+      "color": "warning"
+    },
+    {
+      "title": "❓ Veel Gestelde Vragen",
+      "description": "**Q: Geen Nederlandse MU met vacature?**\nA: Ga naar een random MU zonder entrance fee. Nieuwe plekken worden in-game vermeld.\n\n**Q: Hoe werken gevechten?**\nA: Let op het **vlaggetje** bij de orders! Dat geeft aan waar je moet klikken.\nIn de order tekst staan instructies zoals 'Missie' of prioriteit.\nKlik op de knop met het vlaggetje (Attack of Defend).",
+      "color": "primary",
+      "image": "https://cdn.discordapp.com/attachments/1457351757444419769/1467085390560100438/image.png?ex=6981137e&is=697fc1fe&hm=da3f17782cc2047d8a0f73bfbb2baf851f0c4e2082a477659a18daba4fadf1aa&"
+    },
+    {
+      "title": "🎉 Einde Beginner Handleiding",
+      "description": "Je hebt geleerd:\n• Wat de vier balken betekenen\n• Hoe je met skill points omgaat\n• Basis economie van Warera\n\n**Meer leren?** Zie economie en oorlog\n**Vragen?** Stel ze in ⁉️vragen-en-antwoorden⁉️",
+      "color": "success"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "title": "MU Lidmaadschap",
+  "description": "Geef aan bij welke MU je zit. Als je nog niet in een MU zit, kies dan 'Wachtrij'.",
+  "buttons": [
+    { "label": "De Heeren XVII", "role_id": 123456789012345678, "style": "primary", "row": 0 },
+    { "label": "Korps Mariniers", "role_id": 234567890123456789, "style": "primary", "row": 0 },
+    { "label": "Korps Commando's", "role_id": 345678901234567890, "style": "primary", "row": 0 },
+    { "label": "The Flying Dutchman", "role_id": 456789012345678901, "style": "primary", "row":  1 },
+    { "label": "De Nederlandse Bank", "role_id": 567890123456789012, "style": "primary", "row": 1 },
+    { "label": "Regiment Huzaren", "role_id": 678901234567890123, "style": "primary", "row": 1 },
+    { "label": "Wachtrij", "role_id": 789012345678901234, "style": "secondary", "row": 2 }
+  ]
+}

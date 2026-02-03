@@ -57,17 +57,24 @@ intents.presences = True
 """
 
 intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True  # Add this line for member join/leave events
+intents.presences = True
 
-"""
-Uncomment this if you want to use prefix (normal) commands.
-It is recommended to use slash commands and therefore not use prefix commands.
-
-If you want to use prefix commands, make sure to also enable the intent below in the Discord developer portal.
-"""
-# intents.message_content = True
+# Disable unused intents to optimize performance
+intents.dm_messages = False
+intents.dm_reactions = False
+intents.dm_typing = False
+intents.bans = False
+intents.integrations = False
+intents.invites = False
+intents.webhooks = False
+intents.emojis_and_stickers = False
+intents.guild_scheduled_events = False
+intents.guild_typing = False
+intents.presences = False
 
 # Setup both of the loggers
-
 
 class LoggingFormatter(logging.Formatter):
     # Colors
@@ -137,6 +144,20 @@ class DiscordBot(commands.Bot):
         self.database = None
         self.bot_prefix = os.getenv("PREFIX")
         self.invite_link = os.getenv("INVITE_LINK")
+        self.config = self.load_config()
+        self.start_time = discord.utils.utcnow()
+    
+    def load_config(self) -> dict:
+        """Load configuration from config.json"""
+        config_path = f"{os.path.realpath(os.path.dirname(__file__))}/config.json"
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+                self.logger.info("Configuration loaded successfully")
+                return config
+        except Exception as e:
+            self.logger.error(f"Failed to load config.json: {e}")
+            return {"colors": {"primary": "0x154273", "success": "0x57F287", "error": "0xE02B2B", "warning": "0xF59E42"}}
 
     async def init_db(self) -> None:
         async with aiosqlite.connect(
@@ -152,25 +173,36 @@ class DiscordBot(commands.Bot):
     async def load_cogs(self) -> None:
         """
         The code in this function is executed whenever the bot will start.
+        Recursively loads all .py files from cogs/ and its subdirectories.
         """
-        for file in os.listdir(f"{os.path.realpath(os.path.dirname(__file__))}/cogs"):
-            if file.endswith(".py"):
-                extension = file[:-3]
-                try:
+        cogs_path = f"{os.path.realpath(os.path.dirname(__file__))}/cogs"
+        
+        for root, dirs, files in os.walk(cogs_path):
+            for file in files:
+                if file.endswith(".py"):
+                    # Calculate relative path from cogs directory
+                    relative_path = os.path.relpath(os.path.join(root, file), cogs_path)
+                    # Convert file path to module path (e.g., standard_messages/beginner_handleiding.py -> standard_messages.beginner_handleiding)
+                    extension = relative_path.replace(os.sep, ".")[:-3]
+                    
+                    # try:
                     await self.load_extension(f"cogs.{extension}")
                     self.logger.info(f"Loaded extension '{extension}'")
-                except Exception as e:
-                    exception = f"{type(e).__name__}: {e}"
-                    self.logger.error(
-                        f"Failed to load extension {extension}\n{exception}"
-                    )
+                    # except Exception as e:
+                    #     exception = f"{type(e).__name__}: {e}"
+                    #     self.logger.error(
+                    #         f"Failed to load extension {extension}\n{exception}"
+                    #     )
 
     @tasks.loop(minutes=1.0)
     async def status_task(self) -> None:
         """
         Setup the game status task of the bot.
         """
-        statuses = ["with you!", "with Krypton!", "with humans!"]
+        statuses = ["Werelddominantie aan het voorbereiden...", 
+                    "Regiment Wielrijders aan het verzamelen...", 
+                    "Tulpen aan het handelen...",
+                    "Polders aan het inpolderen...",]
         await self.change_presence(activity=discord.Game(random.choice(statuses)))
 
     @status_task.before_loop

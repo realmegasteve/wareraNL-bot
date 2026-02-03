@@ -1,0 +1,9 @@
+{
+  "title": "MU Lidmaadschap",
+  "description": "Geef aan bij welke MU je zit. Als je nog niet in een MU zit, kies dan 'Wachtrij'.",
+  "buttons": [
+    { "label": "Memes", "role_id": 1462507711999770701, "style": "primary", "row": 0 },
+    { "label": "President Kandidaat", "role_id": 1466128342574170209, "style": "primary", "row": 0 },
+    { "label": "Congress Kandidaat", "role_id": 1467977528865067039, "style": "primary", "row": 0 }
+  ]
+}

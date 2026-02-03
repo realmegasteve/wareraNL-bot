@@ -15,6 +15,7 @@ from discord.ext.commands import Context
 class Owner(commands.Cog, name="owner"):
     def __init__(self, bot) -> None:
         self.bot = bot
+        self.color = int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
 
     @commands.command(
         name="sync",
@@ -34,7 +35,7 @@ class Owner(commands.Cog, name="owner"):
             await context.bot.tree.sync()
             embed = discord.Embed(
                 description="Slash commands have been globally synchronized.",
-                color=0xBEBEFE,
+                color=self.color,
             )
             await context.send(embed=embed)
             return
@@ -43,12 +44,12 @@ class Owner(commands.Cog, name="owner"):
             await context.bot.tree.sync(guild=context.guild)
             embed = discord.Embed(
                 description="Slash commands have been synchronized in this guild.",
-                color=0xBEBEFE,
+                color=self.color,
             )
             await context.send(embed=embed)
             return
         embed = discord.Embed(
-            description="The scope must be `global` or `guild`.", color=0xE02B2B
+            description="The scope must be `global` or `guild`.", color=self.color
         )
         await context.send(embed=embed)
 
@@ -73,7 +74,7 @@ class Owner(commands.Cog, name="owner"):
             await context.bot.tree.sync()
             embed = discord.Embed(
                 description="Slash commands have been globally unsynchronized.",
-                color=0xBEBEFE,
+                color=self.color,
             )
             await context.send(embed=embed)
             return
@@ -82,12 +83,32 @@ class Owner(commands.Cog, name="owner"):
             await context.bot.tree.sync(guild=context.guild)
             embed = discord.Embed(
                 description="Slash commands have been unsynchronized in this guild.",
-                color=0xBEBEFE,
+                color=self.color,
             )
             await context.send(embed=embed)
             return
         embed = discord.Embed(
-            description="The scope must be `global` or `guild`.", color=0xE02B2B
+            description="The scope must be `global` or `guild`.", color=self.color
+        )
+        await context.send(embed=embed)
+
+    @commands.command(name="uptime", description="Check the bot's uptime.")
+    @commands.is_owner()
+    async def uptime(self, context: Context) -> None:
+        """
+        Check the bot's uptime.
+
+        :param context: The command context.
+        """
+        start_time = self.bot.start_time
+        uptime_seconds = int((discord.utils.utcnow() - start_time).total_seconds())
+        hours, remainder = divmod(uptime_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        uptime_string = f"{hours}h {minutes}m {seconds}s"
+        embed = discord.Embed(
+            title="Bot Uptime",
+            description=f"The bot has been online for {uptime_string}.",
+            color=self.color,
         )
         await context.send(embed=embed)
 
@@ -108,12 +129,12 @@ class Owner(commands.Cog, name="owner"):
             await self.bot.load_extension(f"cogs.{cog}")
         except Exception:
             embed = discord.Embed(
-                description=f"Could not load the `{cog}` cog.", color=0xE02B2B
+                description=f"Could not load the `{cog}` cog.", color=self.color
             )
             await context.send(embed=embed)
             return
         embed = discord.Embed(
-            description=f"Successfully loaded the `{cog}` cog.", color=0xBEBEFE
+            description=f"Successfully loaded the `{cog}` cog.", color=self.color
         )
         await context.send(embed=embed)
 
@@ -134,12 +155,12 @@ class Owner(commands.Cog, name="owner"):
             await self.bot.unload_extension(f"cogs.{cog}")
         except Exception:
             embed = discord.Embed(
-                description=f"Could not unload the `{cog}` cog.", color=0xE02B2B
+                description=f"Could not unload the `{cog}` cog.", color=self.color
             )
             await context.send(embed=embed)
             return
         embed = discord.Embed(
-            description=f"Successfully unloaded the `{cog}` cog.", color=0xBEBEFE
+            description=f"Successfully unloaded the `{cog}` cog.", color=self.color
         )
         await context.send(embed=embed)
 
@@ -160,12 +181,12 @@ class Owner(commands.Cog, name="owner"):
             await self.bot.reload_extension(f"cogs.{cog}")
         except Exception:
             embed = discord.Embed(
-                description=f"Could not reload the `{cog}` cog.", color=0xE02B2B
+                description=f"Could not reload the `{cog}` cog.", color=self.color
             )
             await context.send(embed=embed)
             return
         embed = discord.Embed(
-            description=f"Successfully reloaded the `{cog}` cog.", color=0xBEBEFE
+            description=f"Successfully reloaded the `{cog}` cog.", color=self.color
         )
         await context.send(embed=embed)
 
@@ -180,7 +201,7 @@ class Owner(commands.Cog, name="owner"):
 
         :param context: The hybrid command context.
         """
-        embed = discord.Embed(description="Shutting down. Bye! :wave:", color=0xBEBEFE)
+        embed = discord.Embed(description="Shutting down. Bye! :wave:", color=self.color)
         await context.send(embed=embed)
         await self.bot.close()
 
@@ -199,21 +220,21 @@ class Owner(commands.Cog, name="owner"):
         """
         await context.send(message)
 
-    @commands.hybrid_command(
-        name="embed",
-        description="The bot will say anything you want, but within embeds.",
-    )
-    @app_commands.describe(message="The message that should be repeated by the bot")
-    @commands.is_owner()
-    async def embed(self, context: Context, *, message: str) -> None:
-        """
-        The bot will say anything you want, but using embeds.
+    # @commands.hybrid_command(
+    #     name="embed",
+    #     description="The bot will say anything you want, but within embeds.",
+    # )
+    # @app_commands.describe(message="The message that should be repeated by the bot")
+    # @commands.is_owner()
+    # async def embed(self, context: Context, *, message: str) -> None:
+    #     """
+    #     The bot will say anything you want, but using embeds.
 
-        :param context: The hybrid command context.
-        :param message: The message that should be repeated by the bot.
-        """
-        embed = discord.Embed(description=message, color=0xBEBEFE)
-        await context.send(embed=embed)
+    #     :param context: The hybrid command context.
+    #     :param message: The message that should be repeated by the bot.
+    #     """
+    #     embed = discord.Embed(description=message, color=0xBEBEFE)
+    #     await context.send(embed=embed)
 
 
 async def setup(bot) -> None:

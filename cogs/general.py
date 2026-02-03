@@ -6,17 +6,34 @@ Description:
 Version: 6.5.0
 """
 
+import json
+import os
 import platform
 import random
+import pytz
 
 import aiohttp
 import discord
-from discord import app_commands
+from discord import app_commands, datetime
 from discord.ext import commands
 from discord.ext.commands import Context
 
 
-class FeedbackForm(discord.ui.Modal, title="Feeedback"):
+CONFIG_FILE = "config.json"
+
+def load_config() -> dict:
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            config = json.load(f)
+            return config
+        
+def save_config(config: dict) -> None:
+    """Save configuration to JSON file with pretty formatting."""
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=4)
+
+
+class FeedbackForm(discord.ui.Modal, title="Feedback"):
     feedback = discord.ui.TextInput(
         label="What do you think about this bot?",
         style=discord.TextStyle.long,
@@ -42,6 +59,9 @@ class General(commands.Cog, name="general"):
             name="Remove spoilers", callback=self.remove_spoilers
         )
         self.bot.tree.add_command(self.context_menu_message)
+        self.color = int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
+        self.config = load_config() or {}
+
 
     # Message context menu command
     async def remove_spoilers(
@@ -61,7 +81,7 @@ class General(commands.Cog, name="general"):
         embed = discord.Embed(
             title="Message without spoilers",
             description=message.content.replace("||", ""),
-            color=0xBEBEFE,
+            color=self.color,
         )
         if spoiler_attachment is not None:
             embed.set_image(url=attachment.url)
@@ -79,7 +99,7 @@ class General(commands.Cog, name="general"):
         """
         embed = discord.Embed(
             description=f"The ID of {user.mention} is `{user.id}`.",
-            color=0xBEBEFE,
+            color=self.color,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -88,7 +108,7 @@ class General(commands.Cog, name="general"):
     )
     async def help(self, context: Context) -> None:
         embed = discord.Embed(
-            title="Help", description="List of available commands:", color=0xBEBEFE
+            title="Help", description="List of available commands:", color=self.color
         )
         for i in self.bot.cogs:
             if i == "owner" and not (await self.bot.is_owner(context.author)):
@@ -117,10 +137,10 @@ class General(commands.Cog, name="general"):
         """
         embed = discord.Embed(
             description="Used [Krypton's](https://krypton.ninja) template",
-            color=0xBEBEFE,
+            color=self.color,
         )
         embed.set_author(name="Bot Information")
-        embed.add_field(name="Owner:", value="Krypton#7331", inline=True)
+        embed.add_field(name="Owner:", value="teunp", inline=True)
         embed.add_field(
             name="Python Version:", value=f"{platform.python_version()}", inline=True
         )
@@ -150,7 +170,7 @@ class General(commands.Cog, name="general"):
         roles = ", ".join(roles)
 
         embed = discord.Embed(
-            title="**Server Name:**", description=f"{context.guild}", color=0xBEBEFE
+            title="**Server Name:**", description=f"{context.guild}", color=self.color
         )
         if context.guild.icon is not None:
             embed.set_thumbnail(url=context.guild.icon.url)
@@ -192,7 +212,7 @@ class General(commands.Cog, name="general"):
         """
         embed = discord.Embed(
             description=f"Invite me by clicking [here]({self.bot.invite_link}).",
-            color=0xD75BF4,
+            color=self.color,
         )
         try:
             await context.author.send(embed=embed)
@@ -200,25 +220,25 @@ class General(commands.Cog, name="general"):
         except discord.Forbidden:
             await context.send(embed=embed)
 
-    @commands.hybrid_command(
-        name="server",
-        description="Get the invite link of the discord server of the bot for some support.",
-    )
-    async def server(self, context: Context) -> None:
-        """
-        Get the invite link of the discord server of the bot for some support.
+    # @commands.hybrid_command(
+    #     name="server",
+    #     description="Get the invite link of the discord server of the bot for some support.",
+    # )
+    # async def server(self, context: Context) -> None:
+    #     """
+    #     Get the invite link of the discord server of the bot for some support.
 
-        :param context: The hybrid command context.
-        """
-        embed = discord.Embed(
-            description=f"Join the support server for the bot by clicking [here](https://discord.gg/mTBrXyWxAF).",
-            color=0xD75BF4,
-        )
-        try:
-            await context.author.send(embed=embed)
-            await context.send("I sent you a private message!")
-        except discord.Forbidden:
-            await context.send(embed=embed)
+    #     :param context: The hybrid command context.
+    #     """
+    #     embed = discord.Embed(
+    #         description=f"Join the support server for the bot by clicking [here](https://discord.gg/mTBrXyWxAF).",
+    #         color=self.color,
+    #     )
+    #     try:
+    #         await context.author.send(embed=embed)
+    #         await context.send("I sent you a private message!")
+    #     except discord.Forbidden:
+    #         await context.send(embed=embed)
 
     @commands.hybrid_command(
         name="8ball",
@@ -257,40 +277,40 @@ class General(commands.Cog, name="general"):
         embed = discord.Embed(
             title="**My Answer:**",
             description=f"{random.choice(answers)}",
-            color=0xBEBEFE,
+            color=self.color,
         )
         embed.set_footer(text=f"The question was: {question}")
         await context.send(embed=embed)
 
-    @commands.hybrid_command(
-        name="bitcoin",
-        description="Get the current price of bitcoin.",
-    )
-    async def bitcoin(self, context: Context) -> None:
-        """
-        Get the current price of bitcoin.
+    # @commands.hybrid_command(
+    #     name="bitcoin",
+    #     description="Get the current price of bitcoin.",
+    # )
+    # async def bitcoin(self, context: Context) -> None:
+    #     """
+    #     Get the current price of bitcoin.
 
-        :param context: The hybrid command context.
-        """
-        # This will prevent your bot from stopping everything when doing a web request - see: https://discordpy.readthedocs.io/en/stable/faq.html#how-do-i-make-a-web-request
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                "https://api.coindesk.com/v1/bpi/currentprice/BTC.json"
-            ) as request:
-                if request.status == 200:
-                    data = await request.json()
-                    embed = discord.Embed(
-                        title="Bitcoin price",
-                        description=f"The current price is {data['bpi']['USD']['rate']} :dollar:",
-                        color=0xBEBEFE,
-                    )
-                else:
-                    embed = discord.Embed(
-                        title="Error!",
-                        description="There is something wrong with the API, please try again later",
-                        color=0xE02B2B,
-                    )
-                await context.send(embed=embed)
+    #     :param context: The hybrid command context.
+    #     """
+    #     # This will prevent your bot from stopping everything when doing a web request - see: https://discordpy.readthedocs.io/en/stable/faq.html#how-do-i-make-a-web-request
+    #     async with aiohttp.ClientSession() as session:
+    #         async with session.get(
+    #             "https://api.coindesk.com/v1/bpi/currentprice/BTC.json"
+    #         ) as request:
+    #             if request.status == 200:
+    #                 data = await request.json()
+    #                 embed = discord.Embed(
+    #                     title="Bitcoin price",
+    #                     description=f"The current price is {data['bpi']['USD']['rate']} :dollar:",
+    #                     color=self.color,
+    #                 )
+    #             else:
+    #                 embed = discord.Embed(
+    #                     title="Error!",
+    #                     description="There is something wrong with the API, please try again later",
+    #                     color=self.color,
+    #                 )
+    #             await context.send(embed=embed)
 
     @app_commands.command(
         name="feedback", description="Submit a feedback for the owners of the bot"
@@ -309,7 +329,7 @@ class General(commands.Cog, name="general"):
         await interaction.response.send_message(
             embed=discord.Embed(
                 description="Thank you for your feedback, the owners have been notified about it.",
-                color=0xBEBEFE,
+                color=self.color,
             )
         )
 
@@ -318,9 +338,35 @@ class General(commands.Cog, name="general"):
             embed=discord.Embed(
                 title="New Feedback",
                 description=f"{interaction.user} (<@{interaction.user.id}>) has submitted a new feedback:\n```\n{feedback_form.answer}\n```",
-                color=0xBEBEFE,
+                color=self.color,
             )
         )
+
+    @commands.Cog.listener()
+    async def on_member_leave(self, member: discord.Member) -> None:
+        self.bot.logger.info(f"{member} has left the server.")
+        if self.config.get("log_channel_id"):
+            log_channel = member.guild.get_channel(self.config["log_channel_id"])
+            if log_channel:
+                try:
+                    log_embed = discord.Embed(
+                        title="Gebruiker heeft de server verlaten",
+                        description=f"**User:** {member.mention if member else 'Unknown'} "
+                                f"({member.name if member else 'Unknown'})\n",  
+                        color=discord.Color.red(),
+                        timestamp=discord.datetime.now(pytz.timezone('Europe/Amsterdam'))
+                    )
+                    if member:
+                        log_embed.set_thumbnail(url=member.display_avatar.url)
+                    await log_channel.send(embed=log_embed)
+                except (discord.Forbidden, discord.HTTPException) as e:
+                    self.bot.logger.error(f"Failed to post to log channel: {e}")
+
+    @commands.command(name="testleave")
+    @commands.is_owner()
+    async def test_leave(self, context: Context) -> None:
+        """Test command to simulate a member leaving the server."""
+        await self.on_member_leave(context.author)
 
 
 async def setup(bot) -> None:

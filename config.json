@@ -1,0 +1,22 @@
+{
+    "welcome_channel_id": 1401530718223335499,
+    "verification_category_id": 1467976282968166706,
+    "log_channel_id": 1456287198780457134,
+    "roles": {
+        "nederlander": 1456281070722093058,
+        "foreigner": 1467976572517482517,
+        "border_control": 0,
+        "minister_foreign_affairs": 1451180288515506258,
+        "president": 1401530996725383178,
+        "vice_president": 1401531414553428139,
+        "government": 1458527742646816892
+    },
+    "welcome_message": "# Welcome to the Official Nederland War Era Server!\n\nGreetings, traveler! You have arrived at the gates of Nederland.\n\nPlease select your status below to proceed with verification:",
+    "colors": {
+        "primary": "0xffb612",
+        "success": "0x57F287",
+        "error": "0xE02B2B",
+        "warning": "0xF59E42"
+    },
+    "ticket_counter": 11
+}
