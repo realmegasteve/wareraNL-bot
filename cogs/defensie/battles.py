@@ -73,20 +73,17 @@ class BattlePrioritiesModal(discord.ui.Modal, title="Battle Priorities"):
             description=description.rstrip("\n"),
             color=int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
         )
-        channel = interaction.guild.get_channel(1467977826924761128)
+        channel = interaction.guild.get_channel(self.bot.config["channels"]["orders"])
         await channel.send(embed=embed)
         await interaction.response.send_message(
             "Your battle priorities have been submitted.",
             ephemeral=True)
 
 
-# Here we name the cog and create a new class for the cog.
 class Battles(commands.Cog, name="battles"):
     def __init__(self, bot) -> None:
         self.bot = bot
         self.last_priorities = {}
-
-    # Here you can just add your own commands, you'll always need to provide "self" as first parameter.
 
     @app_commands.command(
     name="priorities",

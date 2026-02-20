@@ -1,0 +1,144 @@
+import asyncio
+import logging
+import json as _json
+from typing import Any, Dict, Optional, Sequence
+
+import aiohttp
+
+logger = logging.getLogger("services.api_client")
+
+
+class APIClient:
+	"""Async API client with retries, exponential backoff and API-key rotation.
+
+	- Supports passing an ordered list of API keys (`api_keys`) which will be rotated
+	  when the server returns rate-limit / auth errors.
+	- Implements retries with exponential backoff for transient errors (5xx, 429, network).
+	"""
+
+	def __init__(
+		self,
+		base_url: str,
+		concurrency: int = 10,
+		timeout: int = 30,
+		headers: Optional[Dict[str, str]] = None,
+		api_keys: Optional[Sequence[str]] = None,
+	) -> None:
+		self.base_url = base_url.rstrip("/")
+		self._session: Optional[aiohttp.ClientSession] = None
+		self._semaphore = asyncio.Semaphore(concurrency)
+		self._timeout = aiohttp.ClientTimeout(total=timeout)
+		# fallback headers provided by caller
+		self._base_headers: Dict[str, str] = dict(headers or {})
+
+		# API key rotation
+		self._api_keys = list(api_keys) if api_keys else []
+		self._key_index = 0
+		if self._api_keys:
+			# ensure header contains the active API key
+			self._base_headers["x-api-key"] = self._api_keys[self._key_index]
+
+	async def start(self) -> None:
+		if self._session is None:
+			self._session = aiohttp.ClientSession(timeout=self._timeout)
+			logger.info("APIClient session started")
+
+	async def close(self) -> None:
+		if self._session:
+			await self._session.close()
+			self._session = None
+			logger.info("APIClient session closed")
+
+	def _rotate_key(self) -> None:
+		if not self._api_keys:
+			return
+		self._key_index = (self._key_index + 1) % len(self._api_keys)
+		self._base_headers["x-api-key"] = self._api_keys[self._key_index]
+		logger.info("Rotated API key to index %d", self._key_index)
+
+	async def _request(self, method: str, path: str, **kwargs) -> Any:
+		if self._session is None:
+			raise RuntimeError("APIClient not started; call start() first")
+
+		url = f"{self.base_url}{path}"
+
+		attempts = 0
+		max_attempts = 5
+		backoff = 1.0
+
+		while attempts < max_attempts:
+			attempts += 1
+			try:
+				# merge default headers with per-call headers
+				call_kwargs = dict(kwargs)
+				call_headers = dict(self._base_headers)
+				if "headers" in call_kwargs and call_kwargs["headers"]:
+					call_headers.update(call_kwargs.pop("headers"))
+				if call_headers:
+					call_kwargs.setdefault("headers", call_headers)
+
+				async with self._semaphore:
+					async with self._session.request(method, url, **call_kwargs) as resp:
+						status = resp.status
+						# success
+						if 200 <= status < 300:
+							try:
+								return await resp.json()
+							except Exception:
+								return await resp.text()
+
+						# handle rate limiting: respect Retry-After if provided
+						if status == 429:
+							retry_after = None
+							try:
+								ra = resp.headers.get("Retry-After")
+								if ra is not None:
+									retry_after = float(ra)
+							except Exception:
+								retry_after = None
+
+							logger.warning("Rate limited on %s (429). Retry-after=%s attempt %d/%d", url, retry_after, attempts, max_attempts)
+							# rotate key if available
+							if self._api_keys:
+								self._rotate_key()
+							# wait either server-specified time or backoff
+							await asyncio.sleep(retry_after if retry_after is not None else backoff)
+							backoff = min(backoff * 2, 30.0)
+							if attempts < max_attempts:
+								continue
+							# fallthrough to raise after loop
+
+						# rotate on auth failures and retry once
+						if status in (401, 403):
+							logger.warning("Auth error %s on %s - rotating key if possible", status, url)
+							if self._api_keys:
+								self._rotate_key()
+								await asyncio.sleep(0.5)
+								if attempts < max_attempts:
+									continue
+
+						# retry on server errors
+						if 500 <= status < 600 and attempts < max_attempts:
+							logger.warning("Server error %s on %s - retrying after %s seconds", status, url, backoff)
+							await asyncio.sleep(backoff)
+							backoff = min(backoff * 2, 30.0)
+							continue
+
+						# otherwise raise the status error
+						resp.raise_for_status()
+			except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+				logger.warning("API request error %s - attempt %d/%d", str(e), attempts, max_attempts)
+				if attempts < max_attempts:
+					await asyncio.sleep(backoff)
+					backoff = min(backoff * 2, 30.0)
+					continue
+				raise
+
+	async def get(self, path: str, params: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> Any:
+		return await self._request("GET", path, params=params, json=json, headers=headers)
+
+	async def post(self, path: str, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> Any:
+		return await self._request("POST", path, json=json, headers=headers)
+
+
+__all__ = ["APIClient"]

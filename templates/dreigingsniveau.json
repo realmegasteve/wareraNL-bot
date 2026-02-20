@@ -1,0 +1,12 @@
+{
+"embeds": [
+    {
+      "title": "Dreigingsniveau's en instructies",
+      "description": "**Code Groen**: Geen bekende oorlogsdreiging. Blijf in eco-stand en werk aan je bedrijven.\n**Code Geel:** Mogelijke oorlog op komst. Zorg dat je geen cooldown van de skills-reset activeert, en begin met het inslaan van equipment, munitie, pillen, en voedsel.\n**Code Oranje:** Oorlog verwacht op korte termijn. Verander de productie van je bedrijven naar munitie en voedsel, en vul actief je voorraden aan.\n**Code Rood:** In oorlog. Zet je skills om naar een fighter build, en volg de instructies van de regering.\n\n**Voorbeeld basisvoorraad**:\n - 200 munitie \n - 20 voedsel (vlees of vis) \n - 3 pillen (level 15+) \n - 2 sets equipment \n - genoeg geld voor een skills reset \n - de kleur van je equipment hangt af van je level; levels 1-10: groen, levels 11-25: blauw, levels 26+: paars. \n - de prioriteit bij equipment is wapen > schoenen > overig.",
+      "color": "primary"
+    }
+]
+}
+
+
+

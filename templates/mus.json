@@ -2,33 +2,54 @@
     "embeds": [
         {
             "title": "De Heeren XVII",
-            "description": "https://app.warera.io/mu/695c10139cddbde0503e0d36",
+            "description": "[**Elite MU**](https://app.warera.io/mu/695c10139cddbde0503e0d36)",
             "thumbnail": "https://media.warera.io/avatars/mu/mu-695c10139cddbde0503e0d36-1767642365469-1s8cvy38.jpg"
         },
         {
             "title": "Korps Mariniers",
-            "description": "https://app.warera.io/mu/695c338ec617ea3c92421bc3",
-            "thumbnail": "https://media.warera.io/avatars/mu/mu-695c338ec617ea3c92421bc3-1767651174268-f6er12db.jpg"
+            "description": "[**Elite MU**](https://app.warera.io/mu/695c338ec617ea3c92421bc3)",
+            "thumbnail": "https://media.warera.io/avatars/mu/mu-695c338ec617ea3c92421bc3-1770834028326-m4wudnb7.png"
         },
         {
             "title": "Korps Commando's",
-            "description": "https://app.warera.io/mu/695acce63ae9eac7fb6e59e1",
-            "thumbnail": "https://media.warera.io/avatars/mu/mu-695acce63ae9eac7fb6e59e1-1767558474707-94vzpn4o.png"
+            "description": "[**Elite MU**](https://app.warera.io/mu/695acce63ae9eac7fb6e59e1)",
+            "thumbnail": "https://media.warera.io/avatars/mu/mu-695acce63ae9eac7fb6e59e1-1770820823243-v7bl6nyb.png"
         },
         {
             "title": "The Flying Dutchman",
-            "description": "https://app.warera.io/mu/6970dd1ebea7a2698be2e84e",
-            "thumbnail": "https://media.warera.io/avatars/mu/mu-6970dd1ebea7a2698be2e84e-1769246610284-kol9cbk2.png"
+            "description": "[**Eco MU**](https://app.warera.io/mu/6970dd1ebea7a2698be2e84e)",
+            "thumbnail": "https://media.warera.io/avatars/mu/mu-6970dd1ebea7a2698be2e84e-1770831355728-6mctkthl.png"
         },
         {
             "title": "De Nederlandse Bank",
-            "description": "https://app.warera.io/mu/697de1e370af1f7f8aa169ea",
+            "description": "[**Eco MU**](https://app.warera.io/mu/697de1e370af1f7f8aa169ea)",
             "thumbnail": "https://media.warera.io/avatars/mu/mu-697de1e370af1f7f8aa169ea-1769857667228-r8i3fnrp.png"
         },
         {
             "title": "Regiment Huzaren",
-            "description": "https://app.warera.io/mu/6980b01819decffdc7848ef9",
-            "thumbnail": "https://media.warera.io/avatars/mu/mu-6980b01819decffdc7848ef9-1770042635146-jp3lloc9.png"
+            "description": "[**Standaard MU**](https://app.warera.io/mu/6980b01819decffdc7848ef9)",
+            "thumbnail": "https://media.warera.io/avatars/mu/mu-6980b01819decffdc7848ef9-1770821860524-yd1m6m7w.png"
+        },
+        {
+            "title": "Luchtmobiele Brigade",
+            "description": "[**Standaard MU**](https://app.warera.io/mu/69843f617cf831a523014e15)",
+            "thumbnail": "https://media.warera.io/avatars/mu/mu-69843f617cf831a523014e15-1770476600780-03onmn2a.png"
+        },
+        {
+            "title": "Regiment van Oranje",
+            "description": "[**Standaard MU**](https://app.warera.io/mu/69848b1d7922e416bbcca4e9)",
+            "thumbnail": "https://media.warera.io/avatars/mu/mu-69848b1d7922e416bbcca4e9-1770821085430-y1gtahvp.png"
+        },
+        {
+            "title": "Van Speijk Eskader",
+            "description": "[**Standaard MU**](https://app.warera.io/mu/698f253efffb3268e9276ac1)",
+            "thumbnail": "https://i.imgur.com/0p5j6p1.png"
+        },
+        {
+            "title": "Oranje Huurlingen",
+            "description": "[**Standaard MU**](https://app.warera.io/mu/69906c5a8b9151ad2ba50435)",
+            "thumbnail": "https://media.warera.io/avatars/mu/mu-69906c5a8b9151ad2ba50435-1771094271985-uomonkkc.png"
         }
+
     ]
 }

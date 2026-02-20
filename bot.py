@@ -12,6 +12,7 @@ import os
 import platform
 import random
 import sys
+import traceback
 
 import aiosqlite
 import discord
@@ -108,13 +109,13 @@ class LoggingFormatter(logging.Formatter):
 
 
 logger = logging.getLogger("discord_bot")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # Console handler
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(LoggingFormatter())
 # File handler
-file_handler = logging.FileHandler(filename="discord.log", encoding="utf-8", mode="w")
+file_handler = logging.FileHandler(filename=f"{os.path.realpath(os.path.dirname(__file__))}/logs/discord.log", encoding="utf-8", mode="w")
 file_handler_formatter = logging.Formatter(
     "[{asctime}] [{levelname:<8}] {name}: {message}", "%Y-%m-%d %H:%M:%S", style="{"
 )
@@ -232,6 +233,43 @@ class DiscordBot(commands.Bot):
             )
         )
 
+    async def on_disconnect(self) -> None:
+        """
+        Event handler when the bot disconnects from Discord.
+        """
+        self.logger.warning("Bot disconnected from Discord")
+
+    async def on_resumed(self) -> None:
+        """
+        Event handler when the bot reconnects to Discord.
+        """
+        self.logger.info("Bot reconnected to Discord")
+
+    async def on_error(self, event_method: str, *args, **kwargs) -> None:
+        """
+        Event handler for general errors that occur in events.
+        """
+        self.logger.error(f"An error occurred in {event_method}", exc_info=True)
+
+    # ...existing code...
+    async def on_app_command_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        """Handle errors from application (slash) commands."""
+        
+        # always print full traceback to stderr (visible in terminal) and to logger
+        traceback.print_exception(type(error), error, error.__traceback__, limit=None, file=sys.stderr)
+        self.logger.error(f"An error occurred in app command {getattr(interaction, 'command', None)}: {error}", exc_info=True)
+        # try to notify the user if possible (avoid raising another exception)
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send("An internal error occurred while running this command.", ephemeral=True)
+            else:
+                await interaction.response.send_message("An internal error occurred while running this command.", ephemeral=True)
+        except Exception:
+            # ensure any follow-up failure is also visible
+            traceback.print_exc(file=sys.stderr)
+            self.logger.error("Failed to notify user about app command error", exc_info=True)
+# ...existing code...
+
     async def on_message(self, message: discord.Message) -> None:
         """
         The code in this event is executed every time someone sends a message, with or without the prefix
@@ -318,4 +356,29 @@ class DiscordBot(commands.Bot):
 
 
 bot = DiscordBot()
-bot.run(os.getenv("TOKEN"))
+
+
+# Main loop with reconnection logic
+async def main():
+    """
+    Main function with automatic reconnection handling.
+    """
+    async with bot:
+        while True:
+            try:
+                await bot.start(os.getenv("TOKEN"))
+            except Exception as e:
+                bot.logger.error(f"Bot crashed with error: {e}", exc_info=True)
+                bot.logger.info("Attempting to reconnect in 15 seconds...")
+                await asyncio.sleep(15)
+            finally:
+                if not bot.is_closed():
+                    await bot.close()
+
+
+if __name__ == "__main__":
+    import asyncio
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        bot.logger.info("Bot stopped by user")

@@ -31,6 +31,7 @@ class MUs(GenerateEmbeds, name="mus"):
 
         :param context: The hybrid command context.
         """
+        
         if not self.json_data or not self.json_data.get("embeds"):
             embed = discord.Embed(
                 description="MU data niet gevonden. Gebruik `/reloadmus` om opnieuw te laden.",
@@ -42,6 +43,16 @@ class MUs(GenerateEmbeds, name="mus"):
         # Send confirmation
         await context.send("📚 Bezig met posten van de MU lijst...", ephemeral=True)
         
+        # send MU explanation
+        embed = discord.Embed(
+            title="MU Soorten",
+            description=f"- **Elite MU**: Deze MU's zullen als eerste ingezet worden tijdens gevechten. Dit betekent dat ze geacht worden een voorraad aan equipment, munitie, eten, pillen en geld beschikbaar te houden. Daarnaast wordt actieve deelname aan oorlogen verwacht.\n"
+                        f"- **Eco MU**: Leden van deze MU's zullen tijdens oorlogen in eco stand blijven om de staatskas aan te vullen. Hiervan wordt verwacht dat leden actief doneren aan de staatskas tijdens oorlogen om bounties te kunnen betalen.\n"
+                        f"- **Overige MU**: Van overige MU's wordt niet veel gevraagd, behalve dat ze meevechten tijdens oorlogen. In de aanloop naar oorlogen kunnen leden aanwijzingen volgen van de regering, maar er wordt niet verwacht altijd een voorraad beschikbaar te hebben.",
+            color=discord.Color.gold()
+        )
+        await context.channel.send(embed=embed)
+
         # Send all embeds
         for embed_data in self.json_data["embeds"]:
             try:
