@@ -123,6 +123,10 @@ class Roles(commands.Cog, name="roles"):
         self.bot = bot
         self.template = load_roles_template()
         # Register persistent views for templates so buttons keep working after restarts
+        if self.template.get("embeds"):
+            for embed_data in self.template["embeds"]:
+                if embed_data.get("buttons"):
+                    self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=True))
         if self.template.get("buttons"):
             self.bot.add_view(RoleToggleView(self.template["buttons"], exclusive=True))
 
@@ -130,7 +134,9 @@ class Roles(commands.Cog, name="roles"):
         try:
             general_template = load_roles_template(f"{TEMPLATES_PATH}/roles.json")
             if general_template.get("buttons"):
-                self.bot.add_view(RoleToggleView(general_template["buttons"]))
+                for embed_data in general_template["embeds"]:
+                    if embed_data.get("buttons"):
+                        self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=True))
         except Exception:
             # Fail quietly; commands will still load and can post the view manually
             pass
@@ -158,22 +164,25 @@ class Roles(commands.Cog, name="roles"):
     @commands.has_permissions(manage_roles=True)
     async def generalroles(self, interaction: discord.Interaction) -> None:
         self.template = load_roles_template(f"{TEMPLATES_PATH}/roles.json")
-        buttons = self.template.get("buttons", [])
+        embeds = self.template.get("embeds", [])
+        for embed_data in embeds:
+            buttons = embed_data.get("buttons", [])
 
-        if not buttons:
-            await interaction.response.send_message("No buttons configured in templates/roles.json.", ephemeral=True)
-            return
+            if not buttons:
+                await interaction.response.send_message("No buttons configured in templates/roles.json.", ephemeral=True)
+                return
 
-        embed = discord.Embed(
-            title=self.template.get("title", "Kies je rollen"),
-            description=self.template.get("description", "Klik op een knop om rollen te toggelen."),
-            color=int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
-        )
+            embed = discord.Embed(
+                title=embed_data.get("title", "Kies je rollen"),
+                description=embed_data.get("description", "Klik op een knop om rollen te toggelen."),
+                color=int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
+            )
 
+            # Send embed to channel
+            await interaction.channel.send(embed=embed, view=RoleToggleView(buttons))
         # Send ephemeral confirmation to user
         await interaction.response.send_message("✅ Posted role buttons to the channel.", ephemeral=True)
-        # Send embed to channel
-        await interaction.channel.send(embed=embed, view=RoleToggleView(buttons))
+            
 
     @app_commands.command(name="muwachtlijst", description="Tel het aantal mensen op de wachtlijst voor MU's.")
     async def muwachtlijst(self, interaction: discord.Interaction) -> None:
