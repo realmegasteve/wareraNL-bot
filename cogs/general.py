@@ -19,18 +19,7 @@ from discord.ext import commands
 from discord.ext.commands import Context
 
 
-CONFIG_FILE = "config.json"
-
-def load_config() -> dict:
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            config = json.load(f)
-            return config
-        
-def save_config(config: dict) -> None:
-    """Save configuration to JSON file with pretty formatting."""
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=4)
+# Configuration is provided by the bot at runtime via `bot.config`.
 
 
 class FeedbackForm(discord.ui.Modal, title="Feedback"):
@@ -60,7 +49,7 @@ class General(commands.Cog, name="general"):
         )
         self.bot.tree.add_command(self.context_menu_message)
         self.color = int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
-        self.config = load_config() or {}
+        self.config = getattr(self.bot, "config", {}) or {}
 
 
     # Message context menu command
@@ -345,8 +334,9 @@ class General(commands.Cog, name="general"):
     @commands.Cog.listener()
     async def on_member_leave(self, member: discord.Member) -> None:
         self.bot.logger.info(f"{member} has left the server.")
-        if self.config.get("log_channel_id"):
-            log_channel = member.guild.get_channel(self.config["log_channel_id"])
+        log_channel_id = self.bot.config.get("channels", {}).get("logs")
+        if log_channel_id:
+            log_channel = member.guild.get_channel(log_channel_id)
             if log_channel:
                 try:
                     log_embed = discord.Embed(

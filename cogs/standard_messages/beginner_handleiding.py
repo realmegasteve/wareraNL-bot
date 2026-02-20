@@ -18,7 +18,7 @@ from cogs.standard_messages.generate import GenerateEmbeds
 class BeginnerHandleiding(GenerateEmbeds, name="beginner_handleiding"):
     def __init__(self, bot) -> None:
         super().__init__(bot)
-        self.load_json(f"{os.path.realpath(os.path.dirname(__file__))}/../../templates/beginner_handleiding.json")
+        self.load_json("templates/beginner_handleiding.json")
     
     @commands.hybrid_command(
         name="handleiding",
@@ -64,7 +64,7 @@ class BeginnerHandleiding(GenerateEmbeds, name="beginner_handleiding"):
         :param context: The hybrid command context.
         """
         try:
-            self.load_json(f"{os.path.realpath(os.path.dirname(__file__))}/../../templates/beginner_handleiding.json")
+            self.load_json("templates/beginner_handleiding.json")
             embed = discord.Embed(
                 description=f"✅ Beginner guide succesvol herladen! ({len(self.json_data.get('embeds', []))} embeds)",
                 color=self.get_color("success")

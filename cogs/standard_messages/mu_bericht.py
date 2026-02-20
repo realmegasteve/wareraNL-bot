@@ -18,7 +18,7 @@ from cogs.standard_messages.generate import GenerateEmbeds
 class MUs(GenerateEmbeds, name="mus"):
     def __init__(self, bot) -> None:
         super().__init__(bot)
-        self.load_json(f"{os.path.realpath(os.path.dirname(__file__))}/../../templates/mus.json")
+        self.load_json("templates/mus.json")
     
     @commands.hybrid_command(
         name="mulijst",
@@ -74,7 +74,7 @@ class MUs(GenerateEmbeds, name="mus"):
         :param context: The hybrid command context.
         """
         try:
-            self.load_json(f"{os.path.realpath(os.path.dirname(__file__))}/../../templates/mus.json")
+            self.load_json("templates/mus.json")
             print(self.json_data)
             embed = discord.Embed(
                 description=f"✅ MU succesvol herladen! ({len(self.json_data.get('embeds', []))} embeds)",

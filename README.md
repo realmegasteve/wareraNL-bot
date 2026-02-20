@@ -1,60 +1,89 @@
 # WareraNL Bot
 
-Minimal Discord bot used in this repository. This README covers quick setup, configuration, and common commands for development and deployment.
+WareraNL is a Discord bot implemented in Python using cogs for modular features. This README explains the repository layout, purpose of the main folders and cogs, and how to run the bot in both production and testing modes.
 
-## Prerequisites
+## Repository layout
 
-- Python 3.8+ (recommended)
-- pip
+- `_api_keys.json` — local secret file for API keys (not tracked in VCS). Keep private.
+- `config.json` — main runtime configuration with `roles`, `channels`, colors and message templates.
+- `testing_config.json` — example/template config for a testing server (fill with IDs for your test guild).
+- `bot.py` — main entrypoint. Supports `--testing` and config/token overrides.
+- `requirements.txt` — Python dependencies.
 
-## Quick setup
+- `cogs/` — Discord cogs (feature modules) loaded by the bot. See below for details.
+- `templates/` — JSON/MD templates used by the `standard_messages` cogs.
+- `database/` — SQLite schema and database backups.
+- `logs/` — runtime logs (configured to use relative paths so the repo is portable).
+- `scripts/` — small helper scripts and one-off runners used during development.
+- `services/` — small service modules used by scripts and cogs (DB client, API client, workers).
 
-1. Create and activate a virtual environment:
+## Cogs (features)
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
+- `cogs/embeds.py` — helpers for building rich Discord embeds used across cogs.
+- `cogs/general.py` — common commands and utilities for users and moderation hooks.
+- `cogs/owner.py` — commands restricted to the bot owner (restart, reload, admin tasks).
+- `cogs/poller.py` — scheduled tasks, polling, and background checks the bot performs.
+- `cogs/template.py` — helpers for loading and rendering message templates.
+- `cogs/welcome.py` — welcome flow, verification, ticket creation and approval/deny workflows.
 
-2. Install Python dependencies:
+- `cogs/defensie/battles.py` — domain-specific feature (defensie) for battle tracking.
+- `cogs/role_selection/roles.py` — role-selection helpers (reaction or command-based role assignment).
+- `cogs/standard_messages/` — several files that render and post standard messages (intro, mu_bericht, dreigingsniveau, etc.).
 
-```bash
-pip install -r requirements.txt
-```
+Notes:
+- Most cogs expect a single `bot.config` dictionary loaded at startup (from `config.json` or a chosen config). Role and channel IDs should be stored there to avoid hardcoded numeric IDs in multiple places.
 
-3. Add configuration and API keys:
+## Configuration
 
-- Place your credentials in `_api_keys.json` and your runtime config in `config.json` at the project root. Keep these files secret and out of version control.
+- Put your live values into `config.json`. Keys of interest are `roles` and `channels`, both mapping friendly names to numeric Discord IDs.
+- `testing_config.json` is provided as an example for a test server — populate it with the test server's role/channel IDs.
+
+Secrets / tokens
+
+- The bot reads the Discord token from an environment variable (the default name is `TOKEN`). The startup CLI lets you override the env var name when running a testing instance.
 
 ## Running the bot
 
-- Run locally:
+Basic (production):
 
 ```bash
 python bot.py
 ```
 
-- Using systemd (restart example):
+Run with a specific config file:
 
 ```bash
-sudo systemctl restart discord-bot.service
+python bot.py --config testing_config.json
 ```
 
-## Development
+Start a testing instance (uses `testing_config.json` and can load `.env_test`):
 
-- Use the files under the `cogs/` directory to add or modify bot features.
-- See `scripts/run_poll_once.py` for an example script used by the project.
+```bash
+python bot.py --testing
+```
+
+Common runtime flags (see `bot.py --help` for full list):
+
+- `--testing` — use testing defaults and the testing config file.
+- `--config <path>` — explicitly set the config JSON to load.
+- `--token-env NAME` — set the name of the environment variable that holds the Discord token (useful for running two instances concurrently).
+
+Important: the bot will fail fast if the chosen token is not present. For convenience during local testing, place your test token in a `.env_test` file and use `--testing` so the token is loaded automatically.
+
+## Database & backups
+
+- `database/schema.sql` — schema used to create the bot's SQLite database.
+- Backups in `database/` are kept as timestamped `.backup` files.
+
+## Development notes
+
+- Follow the pattern in `cogs/` when adding new features: encapsulate logic in a Cog, register it in `bot.py` or allow auto-loading from the `cogs/` folder.
+- Avoid hardcoding numeric role/channel IDs in code — add them to `config.json` and reference them from `bot.config`.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and code style.
+Please follow the codebase style, add tests for non-trivial logic, and keep secrets out of commits. If you'd like, I can add an example `CONTRIBUTING.md` with PR/checklist guidelines.
 
-## License
+---
 
-See [LICENSE.md](LICENSE.md).
-
-## Notes
-
-- Keep `_api_keys.json` and any secrets out of the repository. Use environment-specific secrets management in production.
-- If you want, I can also add example config templates or a more detailed setup guide—tell me what you'd like next.
-
+If you want a short quick-start script or example `config.json` for a test server, tell me which pieces to include and I will add them.

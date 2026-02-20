@@ -6,6 +6,7 @@ Description:
 Version: 6.5.0
 """
 
+import argparse
 import json
 import logging
 import os
@@ -13,6 +14,7 @@ import platform
 import random
 import sys
 import traceback
+from pathlib import Path
 
 import aiosqlite
 import discord
@@ -115,7 +117,7 @@ logger.setLevel(logging.DEBUG)
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(LoggingFormatter())
 # File handler
-file_handler = logging.FileHandler(filename=f"{os.path.realpath(os.path.dirname(__file__))}/logs/discord.log", encoding="utf-8", mode="w")
+file_handler = logging.FileHandler(filename="logs/discord.log", encoding="utf-8", mode="w")
 file_handler_formatter = logging.Formatter(
     "[{asctime}] [{levelname:<8}] {name}: {message}", "%Y-%m-%d %H:%M:%S", style="{"
 )
@@ -127,7 +129,7 @@ logger.addHandler(file_handler)
 
 
 class DiscordBot(commands.Bot):
-    def __init__(self) -> None:
+    def __init__(self, config_path: str | Path | None = None) -> None:
         super().__init__(
             command_prefix=commands.when_mentioned_or(os.getenv("PREFIX")),
             intents=intents,
@@ -145,29 +147,31 @@ class DiscordBot(commands.Bot):
         self.database = None
         self.bot_prefix = os.getenv("PREFIX")
         self.invite_link = os.getenv("INVITE_LINK")
-        self.config = self.load_config()
+        self.config = self.load_config(config_path)
         self.start_time = discord.utils.utcnow()
-    
-    def load_config(self) -> dict:
-        """Load configuration from config.json"""
-        config_path = f"{os.path.realpath(os.path.dirname(__file__))}/config.json"
+        
+    def load_config(self, config_path: str | Path | None = None) -> dict:
+        """Load configuration from given JSON path (relative paths supported).
+
+        If `config_path` is None the default `config.json` in the project root is used.
+        """
+        if config_path:
+            cfg = Path(config_path)
+        else:
+            cfg = Path("config.json")
+
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
+            with cfg.open("r", encoding="utf-8") as f:
                 config = json.load(f)
-                self.logger.info("Configuration loaded successfully")
+                self.logger.info(f"Configuration loaded from {cfg}")
                 return config
         except Exception as e:
-            self.logger.error(f"Failed to load config.json: {e}")
+            self.logger.error(f"Failed to load config {cfg}: {e}")
             return {"colors": {"primary": "0x154273", "success": "0x57F287", "error": "0xE02B2B", "warning": "0xF59E42"}}
 
     async def init_db(self) -> None:
-        async with aiosqlite.connect(
-            f"{os.path.realpath(os.path.dirname(__file__))}/database/database.db"
-        ) as db:
-            with open(
-                f"{os.path.realpath(os.path.dirname(__file__))}/database/schema.sql",
-                encoding = "utf-8"
-            ) as file:
+        async with aiosqlite.connect("database/database.db") as db:
+            with open(Path("database") / "schema.sql", encoding = "utf-8") as file:
                 await db.executescript(file.read())
             await db.commit()
 
@@ -176,17 +180,15 @@ class DiscordBot(commands.Bot):
         The code in this function is executed whenever the bot will start.
         Recursively loads all .py files from cogs/ and its subdirectories.
         """
-        cogs_path = f"{os.path.realpath(os.path.dirname(__file__))}/cogs"
-        
-        for root, dirs, files in os.walk(cogs_path):
+        cogs_path = Path("cogs")
+
+        for root, dirs, files in os.walk(str(cogs_path)):
             for file in files:
                 if file.endswith(".py"):
                     # Calculate relative path from cogs directory
-                    relative_path = os.path.relpath(os.path.join(root, file), cogs_path)
+                    relative_path = os.path.relpath(os.path.join(root, file), str(cogs_path))
                     # Convert file path to module path (e.g., standard_messages/beginner_handleiding.py -> standard_messages.beginner_handleiding)
                     extension = relative_path.replace(os.sep, ".")[:-3]
-                    
-                    # try:
                     await self.load_extension(f"cogs.{extension}")
                     self.logger.info(f"Loaded extension '{extension}'")
                     # except Exception as e:
@@ -228,9 +230,7 @@ class DiscordBot(commands.Bot):
         await self.load_cogs()
         self.status_task.start()
         self.database = DatabaseManager(
-            connection=await aiosqlite.connect(
-                f"{os.path.realpath(os.path.dirname(__file__))}/database/database.db"
-            )
+            connection=await aiosqlite.connect("database/database.db")
         )
 
     async def on_disconnect(self) -> None:
@@ -355,7 +355,7 @@ class DiscordBot(commands.Bot):
             raise error
 
 
-bot = DiscordBot()
+# `bot` will be instantiated in __main__ after parsing CLI args to select config/token
 
 
 # Main loop with reconnection logic
@@ -366,7 +366,9 @@ async def main():
     async with bot:
         while True:
             try:
-                await bot.start(os.getenv("TOKEN"))
+                # Pick token env var based on whether we run with testing config
+                token_name = os.getenv("BOT_TOKEN_ENV", "TOKEN")
+                await bot.start(os.getenv(token_name))
             except Exception as e:
                 bot.logger.error(f"Bot crashed with error: {e}", exc_info=True)
                 bot.logger.info("Attempting to reconnect in 15 seconds...")
@@ -378,6 +380,30 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
+    parser = argparse.ArgumentParser(description="Run the WarEraNL Discord bot")
+    parser.add_argument("--testing", action="store_true", help="Run using testing_config.json and TOKEN_TEST env var")
+    parser.add_argument("--config", type=str, help="Path to config JSON to use (overrides --testing)")
+    parser.add_argument("--token-env", type=str, help="Environment variable name that contains the bot token (overrides default)")
+    args = parser.parse_args()
+
+    # Determine config path
+    if args.config:
+        config_path = args.config
+    else:
+        config_path = "testing_config.json" if args.testing else "config.json"
+
+    load_dotenv()
+
+    # Determine token env var name
+    if args.token_env:
+        os.environ["BOT_TOKEN_ENV"] = args.token_env
+    else:
+        # default behaviour: use TOKEN_TEST when testing, otherwise TOKEN
+        os.environ["BOT_TOKEN_ENV"] = "TOKEN_TEST" if args.testing else "TOKEN"
+
+    # instantiate bot with chosen config
+    bot = DiscordBot(config_path=config_path)
+    print(os.getenv(os.environ.get("BOT_TOKEN_ENV")))
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
