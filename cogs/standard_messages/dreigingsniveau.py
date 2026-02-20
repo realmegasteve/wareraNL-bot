@@ -11,7 +11,7 @@ from cogs.standard_messages.generate import GenerateEmbeds
 class dreiging(GenerateEmbeds, name="dreiging"):
     def __init__(self, bot) -> None:
         super().__init__(bot)
-        self.load_json(f"{os.path.realpath(os.path.dirname(__file__))}/../../templates/dreigingsniveau.json")
+        self.load_json("templates/dreigingsniveau.json")
     
     @commands.hybrid_command(
         name="dreigingsniveau",

@@ -9,7 +9,7 @@ import time
 import subprocess
 from datetime import datetime
 
-LOG_FILE = "/home/teun/wareraNL-bot/logs/watchdog.log"
+LOG_FILE = "logs/watchdog.log"
 SERVICE_NAME = "discord-bot.service"
 TIMEOUT = 300  # 5 minutes
 
@@ -45,7 +45,7 @@ def restart_service():
 
 def check_log_activity():
     """Check if bot has written to log recently"""
-    log_path = "/home/teun/wareraNL-bot/discord.log"
+    log_path = "logs/discord.log"
     try:
         if not os.path.exists(log_path):
             return True  # New bot, no log yet

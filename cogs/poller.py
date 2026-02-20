@@ -18,18 +18,7 @@ import asyncio
 from services.api_client import APIClient
 from services.db import Database
 
-CONFIG_FILE = "config.json"
-
-def load_config() -> dict:
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            config = json.load(f)
-            return config
-        
-def save_config(config: dict) -> None:
-    """Save configuration to JSON file with pretty formatting."""
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=4)
+# Configuration is provided by the bot at runtime via `bot.config`.
 
 logger = logging.getLogger("discord_bot")
 
@@ -37,7 +26,8 @@ logger = logging.getLogger("discord_bot")
 class ProductionChecker(commands.Cog, name="production_checker"):
     def __init__(self, bot) -> None:
         self.bot = bot
-        self.config = load_config()
+        # Use central bot config instead of loading file per module
+        self.config = getattr(self.bot, "config", {}) or {}
         self._client: APIClient | None = None
         self._db: Database | None = None
         self._poll_lock: asyncio.Lock = asyncio.Lock()
@@ -59,6 +49,8 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             asyncio.create_task(self._db.close())
 
     async def _ensure_services_and_start(self) -> None:
+        if self.bot.config.get("test"):
+            return
         # Create API client and DB using config values (or defaults)
         base_url = self.config.get("api_base_url", "https://api.example.local")
         db_path = self.config.get("external_db_path", "database/external.db")
@@ -90,8 +82,8 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         """
         self.bot.logger.info("Starting production poll...")
         try:
-            # Get the production channel
-            market_channel_id = self.config.get("production_channel_id")
+            # Get the production channel (from central bot config)
+            market_channel_id = self.config.get("channels", {}).get("production")
             if not market_channel_id:
                 self.bot.logger.warning("Market channel ID not configured")
                 return

@@ -1,5 +1,5 @@
 {
-    "test": false,
+    "test": true,
     "roles": {
         "bezoeker": 1468223393458425858,
         "nederlander": 1456281070722093058,

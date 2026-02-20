@@ -13,7 +13,7 @@ from discord import app_commands
 from discord.ext import commands
 
 
-TEMPLATES_PATH = f"{os.path.realpath(os.path.dirname(__file__))}/../../templates"
+TEMPLATES_PATH = "templates"
 
 
 def load_roles_template(path: str=f"{TEMPLATES_PATH}/mu_roles.json") -> dict:

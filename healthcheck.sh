@@ -1,12 +1,12 @@
 #!/bin/bash
 # Health check script for Discord bot
-# Add to crontab: */5 * * * * /home/teun/wareraNL-bot/healthcheck.sh
+# Add to crontab (run from project root): */5 * * * * /path/to/wareraNL-bot/healthcheck.sh
 
 SERVICE="discord-bot.service"
-LOG_FILE="/home/teun/wareraNL-bot/logs/healthcheck.log"
+LOG_FILE="logs/healthcheck.log"
 
 # Create logs directory if it doesn't exist
-mkdir -p /home/teun/wareraNL-bot/logs
+mkdir -p logs
 
 # Check if service is running
 if ! systemctl is-active --quiet "$SERVICE"; then

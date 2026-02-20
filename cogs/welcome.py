@@ -15,18 +15,14 @@ from discord.ext import commands, tasks
 import datetime
 import logging
 
-CONFIG_FILE = "config.json"
+# Configuration is provided by the bot at runtime via `bot.config`.
+def _local_load_config() -> dict:
+    # kept for backwards compatibility in case a cog expects it
+    return {}
 
-def load_config() -> dict:
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            config = json.load(f)
-            return config
-        
-def save_config(config: dict) -> None:
-    """Save configuration to JSON file with pretty formatting."""
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=4)
+def _local_save_config(config: dict) -> None:
+    # no-op: config should be managed centrally by the bot
+    return
 
 logger = logging.getLogger("discord_bot")
 
@@ -90,45 +86,51 @@ async def create_verification_channel(interaction: discord.Interaction, request_
     - The bot itself
     - The relevant moderator roles (Border Control or Embassy handlers)
     """
-    global config, open_tickets
-
     user = interaction.user
+    guild = interaction.guild
+    config = getattr(interaction.client, "config", {}) or {}
 
     # Check if the user already has an open ticket
     if user.id in open_tickets:
         existing_channel = open_tickets[user.id]
         await interaction.response.send_message(
             f"You already have an open ticket: {existing_channel.mention}. Please resolve it before creating a new one.",
-            ephemeral=True
+            ephemeral=True,
         )
         return
 
-    config = load_config()
-    guild = interaction.guild
+    # Generate unique ticket ID (stored in central config if present)
+    ticket_id = None
+    try:
+        if "ticket_counter" in config:
+            config["ticket_counter"] = int(config.get("ticket_counter", 0)) + 1
+            ticket_id = config["ticket_counter"]
+    except Exception:
+        ticket_id = None
 
-    # Generate unique ticket ID
-    config["ticket_counter"] += 1
-    ticket_id = config["ticket_counter"]
-    save_config(config)
+    if ticket_id is None:
+        # fallback: use timestamp
+        ticket_id = int(datetime.datetime.utcnow().timestamp())
 
     # Configure channel properties based on request type
+    roles_cfg = config.get("roles", {})
     if request_type == "citizen":
         channel_name = f"citizen-{ticket_id}-{user.name}"
-        role_ids = [config["roles"]["border_control"]]
+        role_ids = [roles_cfg.get("border_control")]
         embed_color = discord.Color.green()
         request_title = "Citizenship Verification Request"
     elif request_type == "foreigner":
         channel_name = f"foreigner-{ticket_id}-{user.name}"
-        role_ids = [config["roles"]["border_control"]]
+        role_ids = [roles_cfg.get("border_control")]
         embed_color = discord.Color.blue()
         request_title = "Foreigner Verification Request"
     else:  # embassy
         channel_name = f"embassy-{ticket_id}-{user.name}"
         # Embassy requests notify multiple high-level roles
         role_ids = [
-            config["roles"]["minister_foreign_affairs"],
-            config["roles"]["president"],
-            config["roles"]["vice_president"]
+            roles_cfg.get("minister_foreign_affairs"),
+            roles_cfg.get("president"),
+            roles_cfg.get("vice_president"),
         ]
         embed_color = discord.Color.red()
         request_title = "Emergency Embassy Request"
@@ -138,8 +140,9 @@ async def create_verification_channel(interaction: discord.Interaction, request_
 
     # Get the category to create the channel in (if configured)
     category = None
-    if config["verification_category_id"]:
-        category = guild.get_channel(config["verification_category_id"])
+    verification_cat = config.get("channels", {}).get("verification")
+    if verification_cat:
+        category = guild.get_channel(verification_cat)
 
     # Set up channel permissions
     overwrites = {
@@ -266,7 +269,8 @@ class Welcome(commands.Cog, name="welcome"):
         self.bot.logger.info("Welcome cog initialized")
         # Add the persistent view when the cog is loaded
         self.bot.add_view(WelcomeView(bot))
-        self.config = load_config()
+        # Use the central bot configuration
+        self.config = getattr(self.bot, "config", {}) or {}
 
     def cog_load(self) -> None:
         """Start the scheduled tasks when the cog is loaded."""
@@ -280,8 +284,8 @@ class Welcome(commands.Cog, name="welcome"):
     async def daily_bezoeker_ping(self):
         """Send a daily ping to the bezoeker role in the welcome channel."""
         try:
-            # Get the welcome channel
-            welcome_channel_id = self.config.get("welcome_channel_id")
+            # Get the welcome channel id from bot config
+            welcome_channel_id = self.bot.config.get("channels", {}).get("welcome_buttons")
             if not welcome_channel_id:
                 self.bot.logger.warning("Welcome channel ID not configured")
                 return
@@ -291,7 +295,7 @@ class Welcome(commands.Cog, name="welcome"):
                 channel = guild.get_channel(welcome_channel_id)
                 if channel:
                     # Get the bezoeker role
-                    bezoeker_role_id = self.config.get("roles", {}).get("bezoeker")
+                    bezoeker_role_id = self.bot.config.get("roles", {}).get("bezoeker")
                     if not bezoeker_role_id:
                         self.bot.logger.warning("Bezoeker role ID not configured")
                         return
@@ -325,14 +329,15 @@ class Welcome(commands.Cog, name="welcome"):
         """
 
         # Skip if no welcome channel is configured
-        if not self.config.get("welcome_channel_id"):
+        welcome_channel_id = self.bot.config.get("channels", {}).get("welcome_message")
+        if not welcome_channel_id:
             return
 
-        channel = member.guild.get_channel(self.config["welcome_channel_id"])
+        channel = member.guild.get_channel(welcome_channel_id)
         if not channel:
             return
-        
-        default_role_id = self.config["roles"]["bezoeker"]
+
+        default_role_id = self.bot.config.get("roles", {}).get("bezoeker")
         if default_role_id:
             role = member.guild.get_role(default_role_id)
             if role:
@@ -341,9 +346,14 @@ class Welcome(commands.Cog, name="welcome"):
         embed = discord.Embed(
             title=f"🇳🇱 Welcome to Nederland!",
             description=f"Welcome {member.mention}! We're glad to have you here.",
-            color=int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
+            color=int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16),
         )
-        await member.guild.get_channel(1401530718223335499).send(embed=embed)
+        # optionally send to a dedicated welcome/announcement channel if configured
+        extra_welcome = self.bot.config.get("channels", {}).get("welcome_buttons")
+        if extra_welcome:
+            ch = member.guild.get_channel(extra_welcome)
+            if ch:
+                await ch.send(embed=embed)
 
         # Create the welcome embed
         embed = discord.Embed(
@@ -389,8 +399,9 @@ class Welcome(commands.Cog, name="welcome"):
         
         # Log to the government log channel
         log_posted = False
-        if self.config.get("log_channel_id"):
-            log_channel = interaction.guild.get_channel(self.config["log_channel_id"])
+        log_channel_id = self.bot.config.get("channels", {}).get("logs")
+        if log_channel_id:
+            log_channel = interaction.guild.get_channel(log_channel_id)
             if log_channel:
                 try:
                     log_embed = discord.Embed(
@@ -527,8 +538,9 @@ class Welcome(commands.Cog, name="welcome"):
 
         # Log to the government log channel
         log_posted = False
-        if self.config.get("log_channel_id"):
-            log_channel = interaction.guild.get_channel(self.config["log_channel_id"])
+        log_channel_id = self.bot.config.get("channels", {}).get("logs")
+        if log_channel_id:
+            log_channel = interaction.guild.get_channel(log_channel_id)
             if log_channel:
                 try:
                     log_embed = discord.Embed(
@@ -559,18 +571,31 @@ class Welcome(commands.Cog, name="welcome"):
         )
         mod_embed.set_footer(text=f"Approved by {interaction.user.name}")
 
-        if not log_posted and self.config.get("log_channel_id"):
+        log_channel_id = self.bot.config.get("channels", {}).get("logs")
+        if not log_posted and log_channel_id:
             mod_embed.add_field(name="⚠️ Warning", value="Could not post to log channel", inline=False)
 
         await interaction.response.send_message(embed=mod_embed, ephemeral=True)
 
         if request_type == "citizen":
+            # Build contextual links from config when available
+            cfg_channels = self.bot.config.get("channels", {})
+            handleiding_ch = cfg_channels.get("handleiding")
+            roles_ch = cfg_channels.get("roles_claim")
+            support_ch = cfg_channels.get("vragen")
+
+            parts = [f"Welkom {member.mention} in WarEra Nederland!\n\n"]
+            if handleiding_ch:
+                parts.append(f"Om je op weg te helpen, bekijk onze <#{handleiding_ch}>")
+            if roles_ch:
+                parts.append(f" en claim je rollen in <#{roles_ch}>")
+            if support_ch:
+                parts.append(f". Voor vragen kun terecht in <#{support_ch}>")
+            parts.append(f".\n\nAls laatste: je kan op je profiel bij `Settings > Referrals` een referrer opgeven, vul hier het liefst een **Nederlander** in (bijvoorbeeld *{interaction.user.nick}*), dan krijgen jij en de referrer muntjes.")
+
             welcome_embed = discord.Embed(
                 title="Welkom Nederlander! 🇳🇱",
-                description=f"Welkom {member.mention} in WarEra Nederland!\n\n"
-                            f"Om je op weg te helpen, bekijk onze <#1457351757444419769> en claim je rollen in <#1456612515902390353>. "
-                            f"Voor vragen kun terecht in <#1456252976967581877>.\n\n"
-                            f"Als laatste: je kan op je profiel bij `Settings > Referrals` een referrer opgeven, vul hier het liefst een **Nederlander** in (bijvoorbeeld *{interaction.user.nick}*), dan krijgen jij en de referrer muntjes.",
+                description="".join(parts),
                 color=discord.Color.gold(),
             )
             welcome_embed.set_thumbnail(url=member.display_avatar.url)
@@ -656,8 +681,9 @@ class Welcome(commands.Cog, name="welcome"):
 
         # Log to the government log channel
         log_posted = False
-        if self.config.get("log_channel_id"):
-            log_channel = interaction.guild.get_channel(self.config["log_channel_id"])
+        log_channel_id = self.bot.config.get("channels", {}).get("logs")
+        if log_channel_id:
+            log_channel = interaction.guild.get_channel(log_channel_id)
             if log_channel:
                 try:
                     log_embed = discord.Embed(
@@ -690,7 +716,7 @@ class Welcome(commands.Cog, name="welcome"):
         )
         mod_embed.set_footer(text=f"Denied by {interaction.user.name}")
 
-        if not log_posted and self.config.get("log_channel_id"):
+        if not log_posted and log_channel_id:
             mod_embed.add_field(name="⚠️ Warning", value="Could not post to log channel", inline=False)
 
         await interaction.response.send_message(embed=mod_embed, ephemeral=True)
@@ -780,7 +806,8 @@ class Welcome(commands.Cog, name="welcome"):
 
             # Attempt to assign the embassy role based on country
             self.bot.logger.debug(f"Assigning embassy role for country: {country}")
-            embassy_role = interaction.guild.get_role(1456283384816074813)
+            embassy_role_id = self.bot.config.get("roles", {}).get("ambassadeur")
+            embassy_role = interaction.guild.get_role(embassy_role_id) if embassy_role_id else None
 
             try:
                 await member.add_roles(embassy_role)
@@ -819,7 +846,9 @@ class Welcome(commands.Cog, name="welcome"):
                 # Create the ticket channel
                 self.bot.logger.debug(f"Creating embassy channel for country: {country}")
                 channel_name = f"{country.lower()}-embassy"
-                category = interaction.guild.get_channel(1456259898349453433)
+                # choose a category from config when available
+                cat_id = self.bot.config.get("channels", {}).get("embassy_category") or self.bot.config.get("channels", {}).get("verification")
+                category = interaction.guild.get_channel(cat_id) if cat_id else None
 
                 # Set up channel permissions
                 overwrites = {
@@ -889,8 +918,9 @@ class Welcome(commands.Cog, name="welcome"):
 
             # Log to the government log channel
             log_posted = False
-            if self.config.get("log_channel_id"):
-                log_channel = interaction.guild.get_channel(self.config["log_channel_id"])
+            log_channel_id = self.bot.config.get("channels", {}).get("logs")
+            if log_channel_id:
+                log_channel = interaction.guild.get_channel(log_channel_id)
                 if log_channel:
                     try:
                         log_embed = discord.Embed(
