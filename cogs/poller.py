@@ -790,6 +790,172 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             self.bot.logger.exception("Failed to clear production tables")
             await ctx.send("Failed to clear tables; see logs.")
 
+    @commands.hybrid_command(name="movecost", description="Show break-even hours to recover company relocation cost.")
+    @app_commands.describe(
+        bonus="Your company's current production bonus % (default 0). Rows at or below this are shown as ∞.",
+    )
+    async def movecost(self, ctx: Context, bonus: int = 0):
+        """Break-even table: hours of Automated Engine production to recover the 5-concrete move cost.
+
+        Only the bonus *gain* counts — your engine's base output runs regardless of location.
+        Rows = new production bonus (5 %–80 %), columns = automated engine level (1–7).
+        Rows at or below your current bonus are shown as ∞ (moving gives no gain there).
+        Colour: green < 100 h, yellow 100–200 h, red ≥ 200 h / ∞.
+        Usage: ``/movecost`` or ``/movecost bonus:30``
+        """
+        if not self._client:
+            await ctx.send("API client not initialized.")
+            return
+        if hasattr(ctx, "defer"):
+            await ctx.defer()
+
+        try:
+            prices_resp = await self._client.get("/itemTrading.getPrices")
+        except Exception as exc:
+            await ctx.send(f"Failed to fetch market prices: {exc}")
+            return
+
+        prices = self._unwrap_prices(prices_resp)
+        if not prices:
+            await ctx.send("Could not parse market prices from API response.")
+            return
+
+        concrete_price = float(prices.get("concrete") or prices.get("Concrete") or 0)
+        if concrete_price <= 0:
+            await ctx.send("Concrete price not found or is zero in market data.")
+            return
+        move_cost = 5.0 * concrete_price
+
+        pp_items = ["grain", "lead", "iron", "limestone"]
+        pp_prices = [float(prices[k]) for k in pp_items if prices.get(k) and float(prices[k]) > 0]
+        if not pp_prices:
+            await ctx.send("Could not retrieve enough item prices for PP value calculation.")
+            return
+        avg_pp_value = sum(pp_prices) / len(pp_prices)
+
+        # ── ANSI colour codes (Discord ansi code block) ──────────────────
+        G = "\u001b[32m"   # green  — < 100 h
+        Y = "\u001b[33m"   # yellow — 100–200 h
+        R = "\u001b[31m"   # red    — ≥ 200 h / ∞
+        RESET = "\u001b[0m"
+
+        def _col(h: float) -> str:
+            return G if h <= 72 else (Y if h <= 120 else R)
+
+        bonuses = list(range(5, 85, 5))   # 5 % … 80 % in steps of 5
+        levels  = list(range(1, 8))        # engine level 1 … 7
+        CELL = 5  # visual chars per cell (e.g. "  45h")
+
+        # ── Top label: "Automated Engine Level" centred over the level columns ─
+        level_cols_width = 6 * len(levels)  # each col = 1 space + CELL chars
+        eng_label = "Automated Engine Level"
+        pad_left = max(0, (level_cols_width - len(eng_label)) // 2)
+        eng_header = " " * 7 + " " * pad_left + eng_label   # 7 = len("Bonus │")
+
+        hdr = f"{'Bonus':>5} │" + "".join(f" {'Lv'+str(lv):<{CELL}}" for lv in levels)
+        sep = "──────┼" + "─" * (6 * len(levels))
+
+        rows = []
+        for b in bonuses:
+            bonus_gain = b - bonus
+            cells = []
+            for lv in levels:
+                if bonus_gain <= 0:
+                    # No improvement — moving yields nothing for this row
+                    cells.append(f"{R}{'∞':>{CELL}}{RESET}")
+                else:
+                    # Extra value per hour from the gained bonus only
+                    extra_per_hour = lv * (bonus_gain / 100) * avg_pp_value
+                    h = move_cost / extra_per_hour
+                    num = f"{h:.0f}h"
+                    cells.append(f"{_col(h)}{num:>{CELL}}{RESET}")
+            rows.append(f" {b:>3}% │" + "".join(f" {c}" for c in cells))
+
+        table = (
+            "```ansi\n"
+            + eng_header + "\n"
+            + hdr + "\n"
+            + sep + "\n"
+            + "\n".join(rows)
+            + "\n```"
+        )
+
+        # ── Footer as a separate embed so it is never truncated ──────────
+        assumption = (
+            f"Assumes your current production bonus is **{bonus}%**."
+            if bonus > 0
+            else "Assumes your company currently has **no production bonus**. Use `/movecost <value>` to specify yours."
+        )
+        colour = self._embed_colour()
+        embed = discord.Embed(
+            title="Break-even hours — company relocation",
+            description=(
+                f"Hours of Automated Engine production to recover the move cost.\n"
+                f"{assumption}\n\n"
+                f"**Move cost:** 5 × {concrete_price:.2f} = **{move_cost:.2f} coins**\n"
+                f"**PP value avg:** {avg_pp_value:.4f} coins/pp"
+            ),
+            colour=colour,
+        )
+
+        if len(table) <= 1990:
+            await ctx.send(table)
+        else:
+            await ctx.send(table[:1990] + "\n```")
+        await ctx.send(embed=embed)
+
+    @staticmethod
+    def _unwrap_prices(resp) -> dict[str, float]:
+        """Extract a {itemCode: price} dict from various API response shapes."""
+        def _from_dict(d: dict) -> dict[str, float]:
+            out: dict[str, float] = {}
+            for k, v in d.items():
+                try:
+                    out[k] = float(v)
+                except (TypeError, ValueError):
+                    pass
+            return out
+
+        if isinstance(resp, dict):
+            # Try result.data first
+            data = (resp.get("result") or {}).get("data") if isinstance(resp.get("result"), dict) else None
+            if isinstance(data, dict):
+                result = _from_dict(data)
+                if result:
+                    return result
+            # Try root-level keys that look like item codes
+            candidate = _from_dict(resp)
+            if candidate:
+                return candidate
+            # Try a list under any key
+            for v in resp.values():
+                if isinstance(v, list):
+                    out: dict[str, float] = {}
+                    for entry in v:
+                        if isinstance(entry, dict):
+                            code = entry.get("itemCode") or entry.get("item") or entry.get("code")
+                            price = entry.get("price") or entry.get("value")
+                            if code and price is not None:
+                                try:
+                                    out[code] = float(price)
+                                except (TypeError, ValueError):
+                                    pass
+                    if out:
+                        return out
+        if isinstance(resp, list):
+            out = {}
+            for entry in resp:
+                if isinstance(entry, dict):
+                    code = entry.get("itemCode") or entry.get("item") or entry.get("code")
+                    price = entry.get("price") or entry.get("value")
+                    if code and price is not None:
+                        try:
+                            out[code] = float(price)
+                        except (TypeError, ValueError):
+                            pass
+            return out
+        return {}
+
     # ------------------------------------------------------------------ #
     # Commands — citizen levels                                            #
     # ------------------------------------------------------------------ #
