@@ -792,17 +792,29 @@ class ProductionChecker(commands.Cog, name="production_checker"):
 
     @commands.hybrid_command(name="movecost", description="Show break-even hours to recover company relocation cost.")
     @app_commands.describe(
-        bonus="Your company's current production bonus % (default 0). Rows at or below this are shown as ∞.",
+        bonuses='Optional: current bonus, or "current new" (e.g. "30" or "30 55"). Leave blank for full table.',
     )
-    async def movecost(self, ctx: Context, bonus: int = 0):
+    async def movecost(self, ctx: Context, bonuses: str = ""):
         """Break-even table: hours of Automated Engine production to recover the 5-concrete move cost.
 
         Only the bonus *gain* counts — your engine's base output runs regardless of location.
         Rows = new production bonus (5 %–80 %), columns = automated engine level (1–7).
         Rows at or below your current bonus are shown as ∞ (moving gives no gain there).
-        Colour: green < 100 h, yellow 100–200 h, red ≥ 200 h / ∞.
-        Usage: ``/movecost`` or ``/movecost bonus:30``
+        Colour: green ≤ 72 h, yellow 73–120 h, red > 120 h / ∞.
+        Usage: ``/movecost``  ``/movecost 30``  ``/movecost 30 55``
         """
+        # Parse the combined bonuses argument
+        parts = bonuses.split()
+        bonus: int = 0
+        new_bonus: int | None = None
+        try:
+            if len(parts) >= 1:
+                bonus = int(parts[0])
+            if len(parts) >= 2:
+                new_bonus = int(parts[1])
+        except ValueError:
+            await ctx.send("Invalid input. Use `/movecost`, `/movecost 30`, or `/movecost 30 55`.")
+            return
         if not self._client:
             await ctx.send("API client not initialized.")
             return
@@ -833,24 +845,63 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             return
         avg_pp_value = sum(pp_prices) / len(pp_prices)
 
+        colour = self._embed_colour()
+
         # ── ANSI colour codes (Discord ansi code block) ──────────────────
-        G = "\u001b[32m"   # green  — < 100 h
-        Y = "\u001b[33m"   # yellow — 100–200 h
-        R = "\u001b[31m"   # red    — ≥ 200 h / ∞
+        G = "\u001b[32m"   # green  — ≤ 72 h
+        Y = "\u001b[33m"   # yellow — 73–120 h
+        R = "\u001b[31m"   # red    — > 120 h / ∞
         RESET = "\u001b[0m"
 
         def _col(h: float) -> str:
             return G if h <= 72 else (Y if h <= 120 else R)
 
+        levels = list(range(1, 8))  # engine level 1 … 7
+
+        # ── Single break-even result (new_bonus provided) ─────────────────
+        if new_bonus is not None:
+            bonus_gain = new_bonus - bonus
+            assumption = (
+                f"Moving from **{bonus}%** → **{new_bonus}%** (gain: **+{bonus_gain}%**)"
+            )
+            if bonus_gain <= 0:
+                embed = discord.Embed(
+                    title="Break-even hours — company relocation",
+                    description=(
+                        f"{assumption}\n\n"
+                        f"The new bonus is not higher than your current bonus — move gives no gain."
+                    ),
+                    colour=colour,
+                )
+            else:
+                level_lines = []
+                for lv in levels:
+                    extra_per_hour = lv * (bonus_gain / 100) * avg_pp_value
+                    h = move_cost / extra_per_hour
+                    level_lines.append(f"Level {lv}: **{h:.0f}h**")
+                embed = discord.Embed(
+                    title="Break-even hours — company relocation",
+                    description=(
+                        f"Hours of Automated Engine production to recover the move cost.\n"
+                        f"{assumption}\n\n"
+                        + "\n".join(level_lines)
+                        + f"\n\n**Move cost:** 5 × {concrete_price:.2f} = **{move_cost:.2f} coins**\n"
+                        f"**PP value avg:** {avg_pp_value:.4f} coins/pp"
+                    ),
+                    colour=colour,
+                )
+            await ctx.send(embed=embed)
+            return
+
+        # ── Full table ────────────────────────────────────────────────────
         bonuses = list(range(5, 85, 5))   # 5 % … 80 % in steps of 5
-        levels  = list(range(1, 8))        # engine level 1 … 7
         CELL = 5  # visual chars per cell (e.g. "  45h")
 
-        # ── Top label: "Automated Engine Level" centred over the level columns ─
-        level_cols_width = 6 * len(levels)  # each col = 1 space + CELL chars
+        # "Automated Engine Level" centred over the level columns
+        level_cols_width = 6 * len(levels)
         eng_label = "Automated Engine Level"
         pad_left = max(0, (level_cols_width - len(eng_label)) // 2)
-        eng_header = " " * 7 + " " * pad_left + eng_label   # 7 = len("Bonus │")
+        eng_header = " " * 7 + " " * pad_left + eng_label
 
         hdr = f"{'Bonus':>5} │" + "".join(f" {'Lv'+str(lv):<{CELL}}" for lv in levels)
         sep = "──────┼" + "─" * (6 * len(levels))
@@ -861,14 +912,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             cells = []
             for lv in levels:
                 if bonus_gain <= 0:
-                    # No improvement — moving yields nothing for this row
                     cells.append(f"{R}{'∞':>{CELL}}{RESET}")
                 else:
-                    # Extra value per hour from the gained bonus only
                     extra_per_hour = lv * (bonus_gain / 100) * avg_pp_value
                     h = move_cost / extra_per_hour
-                    num = f"{h:.0f}h"
-                    cells.append(f"{_col(h)}{num:>{CELL}}{RESET}")
+                    cells.append(f"{_col(h)}{f'{h:.0f}h':>{CELL}}{RESET}")
             rows.append(f" {b:>3}% │" + "".join(f" {c}" for c in cells))
 
         table = (
@@ -880,13 +928,17 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             + "\n```"
         )
 
-        # ── Footer as a separate embed so it is never truncated ──────────
-        assumption = (
-            f"Assumes your current production bonus is **{bonus}%**."
-            if bonus > 0
-            else "Assumes your company currently has **no production bonus**. Use `/movecost <value>` to specify yours."
-        )
-        colour = self._embed_colour()
+        if bonus > 0:
+            assumption = (
+                f"Assumes your current production bonus is **{bonus}%**.\n"
+                f"Add a second number to get break-even for a specific target, e.g. `/movecost {bonus} 55`."
+            )
+        else:
+            assumption = (
+                "Assumes your company currently has **no production bonus**.\n"
+                "You can supply your current bonus as a first number (e.g. `/movecost 30`), "
+                "and optionally a target bonus as a second number (e.g. `/movecost 30 55`)."
+            )
         embed = discord.Embed(
             title="Break-even hours — company relocation",
             description=(
