@@ -1,5 +1,8 @@
 belgium_bot.py
 _api_keys.json
+.env_test
+logs/
+pyrightconfig.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

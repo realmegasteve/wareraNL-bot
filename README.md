@@ -42,6 +42,50 @@ Secrets / tokens
 
 - The bot reads the Discord token from an environment variable (the default name is `TOKEN`). The startup CLI lets you override the env var name when running a testing instance.
 
+## Setup
+
+**1. Create a virtual environment and install dependencies**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+**2. Create your environment file**
+
+For production, create a `.env` file in the project root:
+
+```
+TOKEN=your_production_discord_bot_token
+PREFIX=!
+INVITE_LINK=https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID
+```
+
+For testing, create a `.env_test` file instead:
+
+```
+TOKEN_TEST=your_test_discord_bot_token
+PREFIX=!
+INVITE_LINK=https://discord.com/oauth2/authorize?client_id=YOUR_TEST_CLIENT_ID
+```
+
+**3. Create the API keys file**
+
+Add your War Era API key to `_api_keys.json`. Create this file in the project root:
+
+```json
+{
+    "keys": [
+        "your_api_key_here"
+    ]
+}
+```
+
+**4. Configure `config.json` / `testing_config.json`**
+
+Fill in the `roles` and `channels` sections with the numeric Discord IDs from your server.
+
 ## Running the bot
 
 Basic (production):

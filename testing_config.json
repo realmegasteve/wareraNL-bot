@@ -10,9 +10,11 @@
         "vice_president": 1401531414553428139,
         "government": 1458527742646816892,
         "ambassadeur": 1451180288515506258,
-        "commandant": 1458427087189835776
+        "commandant": 1458427087189835776,
+        "tester": 1474452549456105507
     },
     "channels": {
+        "testing-area": 1474452856584011929,
         "welcome_message": 1401530718223335499,
         "welcome_buttons": 1468223553156546613,
         "verification": 1467976282968166706,

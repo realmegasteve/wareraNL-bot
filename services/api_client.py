@@ -140,5 +140,80 @@ class APIClient:
 	async def post(self, path: str, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> Any:
 		return await self._request("POST", path, json=json, headers=headers)
 
+	@staticmethod
+	def _unwrap_trpc_batch_item(item: Any) -> Any:
+		"""Extract the data payload from one tRPC batch response element."""
+		if not isinstance(item, dict):
+			return item
+		result = item.get("result")
+		if isinstance(result, dict):
+			data = result.get("data")
+			return data if data is not None else result
+		if "error" in item:
+			return None
+		return item
+
+	async def batch_get(
+		self,
+		procedure: str,
+		inputs: list[Dict[str, Any]],
+		*,
+		batch_size: int = 30,
+		chunk_sleep: float = 1.0,
+	) -> list[Any]:
+		"""Call one tRPC procedure for many inputs using tRPC HTTP batching.
+
+		Each chunk of up to *batch_size* inputs is sent as a single HTTP request:
+			GET /proc,proc,...?batch=1&input={"0":{...},"1":{...},...}
+		If the server doesn't return a list of the right length the whole chunk
+		falls back to individual ``get()`` calls automatically.
+
+		Returns a flat list of unwrapped results in the same order as *inputs*.
+		*chunk_sleep* seconds are awaited between HTTP requests.
+		"""
+		proc = procedure.lstrip("/")
+		all_results: list[Any] = []
+
+		for chunk_start in range(0, len(inputs), batch_size):
+			if chunk_start > 0 and chunk_sleep > 0:
+				await asyncio.sleep(chunk_sleep)
+
+			chunk = inputs[chunk_start : chunk_start + batch_size]
+			path = "/" + ",".join(proc for _ in chunk)
+			input_map = {str(j): inp for j, inp in enumerate(chunk)}
+			params = {"batch": "1", "input": _json.dumps(input_map)}
+
+			chunk_results: list[Any] | None = None
+			try:
+				resp = await self._request("GET", path, params=params)
+				if isinstance(resp, list) and len(resp) == len(chunk):
+					chunk_results = [self._unwrap_trpc_batch_item(item) for item in resp]
+				else:
+					logger.warning(
+						"batch_get: unexpected response shape for chunk %d (got %s), falling back",
+						chunk_start // batch_size,
+						type(resp).__name__,
+					)
+			except Exception as exc:
+				logger.warning(
+					"batch_get: batch of %d failed (%s), falling back to individual calls",
+					len(chunk),
+					exc,
+				)
+
+			if chunk_results is None:
+				chunk_results = []
+				for inp in chunk:
+					try:
+						result = await self._request("GET", f"/{proc}", params={"input": _json.dumps(inp)})
+						chunk_results.append(result)
+					except Exception:
+						chunk_results.append(None)
+					await asyncio.sleep(0.3)
+
+			all_results.extend(chunk_results)
+
+		return all_results
+
 
 __all__ = ["APIClient"]

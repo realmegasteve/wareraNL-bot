@@ -1,60 +1,73 @@
-"""
-Copyright © Krypton 2019-Present - https://github.com/kkrypt0nn (https://krypton.ninja)
-Description:
-🐍 A simple template to start to code your own and personalized Discord bot in Python
+"""Production & citizen tracking cog for the WarEra Discord bot."""
 
-Version: 6.5.0
-"""
-
-import os
 import json
 import logging
 from datetime import datetime
+import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 from discord.ext.commands import Context
 import asyncio
 
-# local services (lightweight skeletons)
 from services.api_client import APIClient
 from services.db import Database
-
-# Configuration is provided by the bot at runtime via `bot.config`.
+from services.citizen_cache import CitizenCache
+from services.country_utils import extract_country_list, find_country, country_id as cid_of
 
 logger = logging.getLogger("discord_bot")
 
-# Here we name the cog and create a new class for the cog.
+# Role IDs allowed to run privileged commands (in addition to bot owner)
+_PRIVILEGED_ROLE_IDS: set[int] = {
+    1451180288515506258,  # minister_foreign_affairs / ambassadeur
+    1401530996725383178,  # president
+    1401531414553428139,  # vice_president
+    1458527742646816892,  # government
+    1458427087189835776,  # commandant
+}
+
+
+def _has_privileged_role() -> bool:
+    """app_commands check: owner OR one of the privileged roles (bypassed in test mode)."""
+    async def predicate(interaction: discord.Interaction) -> bool:
+        bot = interaction.client
+        # In test mode everyone is allowed
+        if getattr(bot, "testing", False):
+            return True
+        # Bot owner is always allowed
+        app_info = await bot.application_info()
+        if interaction.user.id == app_info.owner.id:
+            return True
+        if interaction.guild and isinstance(interaction.user, discord.Member):
+            user_role_ids = {r.id for r in interaction.user.roles}
+            if user_role_ids & _PRIVILEGED_ROLE_IDS:
+                return True
+        raise app_commands.MissingPermissions(["privileged_role"])
+    return app_commands.check(predicate)
+
+
 class ProductionChecker(commands.Cog, name="production_checker"):
     def __init__(self, bot) -> None:
         self.bot = bot
-        # Use central bot config instead of loading file per module
         self.config = getattr(self.bot, "config", {}) or {}
         self._client: APIClient | None = None
         self._db: Database | None = None
+        self._citizen_cache: CitizenCache | None = None
         self._poll_lock: asyncio.Lock = asyncio.Lock()
 
-    # Here you can just add your own commands, you'll always need to provide "self" as first parameter.
-
     def cog_load(self) -> None:
-        """Start the scheduled tasks when the cog is loaded."""
-        # Initialize services lazily
         asyncio.create_task(self._ensure_services_and_start())
 
     def cog_unload(self) -> None:
-        """Cancel scheduled tasks when the cog is unloaded."""
         self.hourly_production_check.cancel()
-        # close services if initialized
+        self.daily_citizen_refresh.cancel()
         if self._client:
             asyncio.create_task(self._client.close())
         if self._db:
             asyncio.create_task(self._db.close())
 
     async def _ensure_services_and_start(self) -> None:
-        if self.bot.config.get("test"):
-            return
-        # Create API client and DB using config values (or defaults)
         base_url = self.config.get("api_base_url", "https://api.example.local")
         db_path = self.config.get("external_db_path", "database/external.db")
-        # load api keys if available
         api_keys = None
         try:
             with open("_api_keys.json", "r") as kf:
@@ -66,225 +79,418 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         await self._client.start()
         self._db = Database(db_path)
         await self._db.setup()
+        self._citizen_cache = CitizenCache(self._client, self._db)
+
         self.hourly_production_check.start()
 
-    @tasks.loop(minutes=15)  # Runs every hour
+    # ------------------------------------------------------------------ #
+    # Hourly production poll                                               #
+    # ------------------------------------------------------------------ #
+
+    @tasks.loop(minutes=15)
     async def hourly_production_check(self):
         """Scheduled wrapper that ensures only one poll runs at a time."""
+        import time
+        self.bot.logger.info("[production poll] starting")
+        t0 = time.monotonic()
         async with self._poll_lock:
-            await self._run_poll_once()
+            changes = await self._run_poll_once()
+        elapsed = time.monotonic() - t0
+        if changes:
+            self.bot.logger.info(
+                "[production poll] done in %.1fs — %d change(s): %s",
+                elapsed,
+                len(changes),
+                ", ".join(f"{item}: {old} → {new}" for item, old, new in changes),
+            )
+        else:
+            self.bot.logger.info("[production poll] done in %.1fs — no changes", elapsed)
 
-    async def _run_poll_once(self) -> None:
-        """Perform a single production poll (extracted from the scheduled task).
-        This can be called from the scheduled loop or from a manual command.
+    @hourly_production_check.before_loop
+    async def before_hourly_production_check(self):
+        await self.bot.wait_until_ready()
+        # Skip the immediate first fire — wait one full interval before polling
+        interval = (
+            self.hourly_production_check.hours * 3600
+            + self.hourly_production_check.minutes * 60
+            + self.hourly_production_check.seconds
+        )
+        await asyncio.sleep(interval)
 
-        Returns a list of change tuples: (item, prev_desc, new_desc).
+    async def _run_poll_once(self) -> list[tuple[str, str, str]]:
+        """Perform a single production poll using getRecommendedRegionIdsByItemCode.
+
+        Tracks two tops per item:
+          - Permanent leader: highest (strategicBonus + ethicSpecializationBonus)
+          - Deposit top: highest total bonus where a deposit is active
+
+        Returns a list of change tuples: (label, old_desc, new_desc).
         """
         self.bot.logger.info("Starting production poll...")
         try:
-            # Get the production channel (from central bot config)
             market_channel_id = self.config.get("channels", {}).get("production")
             if not market_channel_id:
                 self.bot.logger.warning("Market channel ID not configured")
-                return
-
-            # fetch latest state from DB
-            last_seen = None
-            if self._db:
-                last_seen = await self._db.get_poll_state("production_checker_last_seen")
-
-            # perform country polling: get all countries and check each one
-            if not self._client:
-                self.bot.logger.warning("API client not initialized")
-                return
-
-            if not self.config.get("api_base_url"):
-                self.bot.logger.warning("api_base_url not configured; skipping country polling")
-                return
+                return []
+            if not self._client or not self.config.get("api_base_url"):
+                self.bot.logger.warning("API client or api_base_url not configured")
+                return []
 
             try:
                 all_countries = await self._client.get("/country.getAllCountries")
             except Exception:
                 self.bot.logger.exception("Failed to fetch country list")
-                return
+                return []
 
-            # extract list of country objects from the response
-            country_list = []
-            if isinstance(all_countries, list):
-                country_list = [c for c in all_countries if isinstance(c, dict)]
-            elif isinstance(all_countries, dict):
-                if isinstance(all_countries.get("data"), list):
-                    country_list = [c for c in all_countries.get("data") if isinstance(c, dict)]
-                elif isinstance(all_countries.get("result"), dict) and isinstance(all_countries.get("result").get("data"), list):
-                    country_list = [c for c in all_countries.get("result").get("data") if isinstance(c, dict)]
-                else:
-                    for key in ("countries", "data", "result", "items"):
-                        v = all_countries.get(key)
-                        if isinstance(v, list):
-                            country_list = [c for c in v if isinstance(c, dict)]
-                            break
-
+            country_list = extract_country_list(all_countries)
             if not country_list:
-                self.bot.logger.info("No country objects found in /country.getAllCountries response")
-                return
+                return []
 
-            # build current top per specialization
-            tops: dict[str, dict] = {}
             now = datetime.utcnow().isoformat() + "Z"
 
-            def _get_production_bonus(obj):
-                # first try rankings.countryProductionBonus.value
-                try:
-                    rb = obj.get("rankings", {}).get("countryProductionBonus")
-                    if isinstance(rb, dict) and "value" in rb:
-                        return float(rb.get("value"))
-                except Exception:
-                    pass
-                # fallback to strategicResources.bonuses.productionPercent
-                try:
-                    sp = obj.get("strategicResources", {}).get("bonuses", {}).get("productionPercent")
-                    if sp is not None:
-                        return float(sp)
-                except Exception:
-                    pass
-                return None
+            # cid → country object — used to look up name from a country ID
+            cid_to_country: dict[str, dict] = {cid_of(c): c for c in country_list}
 
+            # items_to_poll: set of item codes that have at least one specialized country
+            items_to_poll: set[str] = set()
             for country in country_list:
-                cid = country.get("_id") or country.get("id") or country.get("countryId") or country.get("code")
-                code = country.get("code")
-                name = country.get("name")
-                specialized_item = country.get("specializedItem") or country.get("specialized_item") or country.get("specialization")
-                pb = _get_production_bonus(country)
-
-                # Apply ruling party "industrialism" ethics if present.
-                adjusted_pb = None
-                rp_id = None
-                for key in ("rulingParty", "ruling_party", "rulingPartyId", "ruling_party_id"):
-                    if key in country:
-                        rp = country[key]
-                        if rp is None:
-                            break
-                        if isinstance(rp, dict):
-                            for k2 in ("id", "partyId", "party_id"):
-                                if k2 in rp and rp[k2] is not None:
-                                    rp_id = str(rp[k2])
-                                    break
-                        else:
-                            # ensure we don't convert None to the string "None"
-                            if rp:
-                                rp_id = str(rp)
-                        break
-
-                if rp_id and pb is not None and self._client:
+                item = (
+                    country.get("specializedItem")
+                    or country.get("specialized_item")
+                    or country.get("specialization")
+                )
+                if not item:
+                    continue
+                items_to_poll.add(item)
+                if self._db:
+                    pb = self._get_permanent_bonus(country)
                     try:
-                        party = await self._client.get("/party.getById", params={"input": json.dumps({"partyId": rp_id})})
-                        industrial_level = None
-                        ethics_obj = None
-                        if isinstance(party, dict):
-                            obj = party.get("result") if isinstance(party.get("result"), dict) else None
-                            if isinstance(obj, dict) and isinstance(obj.get("data"), dict):
-                                obj = obj.get("data")
-                            else:
-                                obj = party.get("data") if isinstance(party.get("data"), dict) else obj
-                            if isinstance(obj, dict) and "ethics" in obj:
-                                ethics_obj = obj.get("ethics")
-                            elif "ethics" in party:
-                                ethics_obj = party.get("ethics")
-                        if isinstance(ethics_obj, dict):
-                            industrial_level = ethics_obj.get("industrialism")
-                            if industrial_level is None:
-                                industrial_level = ethics_obj.get("industrial")
-                        # industrialism adds percentage points (e.g. +30 means 33 -> 63)
-                        extra_points = 0.0
-                        if industrial_level == 1:
-                            extra_points = 10.0
-                        elif industrial_level == 2:
-                            extra_points = 30.0
-                        try:
-                            pb_num = float(pb)
-                            adjusted_pb = pb_num + extra_points
-                            pb = adjusted_pb
-                            self.bot.logger.debug("Country %s ruling party %s industrialism=%s -> +%spp", cid, rp_id, industrial_level, int(extra_points))
-                        except Exception:
-                            pass
+                        await self._db.save_country_snapshot(
+                            cid_of(country), country.get("code"), country.get("name"),
+                            item, pb, json.dumps(country, default=str), now,
+                        )
                     except Exception:
-                        self.bot.logger.exception("Failed to fetch party %s", rp_id)
+                        self.bot.logger.exception("Failed to save snapshot for country %s", cid_of(country))
 
-                # persist snapshot
-                if self._db and cid:
-                    try:
-                        await self._db.save_country_snapshot(str(cid), code, name, specialized_item, pb, json.dumps(country, default=str), now)
-                    except Exception:
-                        self.bot.logger.exception("Failed to save snapshot for country %s", cid)
+            # Build regionId → countryId map from region.getRegionsObject.
+            # Each region object contains a "country" field = current owner's countryId.
+            region_to_cid: dict[str, str] = {}
+            try:
+                regions_resp = await self._client.get("/region.getRegionsObject")
+                regions_data = (
+                    regions_resp.get("result", {}).get("data", {})
+                    if isinstance(regions_resp, dict) else {}
+                )
+                if isinstance(regions_data, dict):
+                    for rid, robj in regions_data.items():
+                        cid = robj.get("country") if isinstance(robj, dict) else None
+                        if cid:
+                            region_to_cid[rid] = cid
+                region_to_name: dict[str, str] = {
+                    rid: robj.get("name", rid)
+                    for rid, robj in (regions_data.items() if isinstance(regions_data, dict) else [])
+                    if isinstance(robj, dict)
+                }
+            except Exception:
+                self.bot.logger.exception("Failed to fetch region map; deposit names will be unavailable")
+                region_to_name = {}
 
-                if not specialized_item:
+            changes: list[tuple[str, str, str]] = []
+            for item in items_to_poll:
+                try:
+                    resp = await self._client.get(
+                        "/company.getRecommendedRegionIdsByItemCode",
+                        params={"input": json.dumps({"itemCode": item})},
+                    )
+                except Exception:
+                    self.bot.logger.exception("Failed to fetch recommended regions for %s", item)
                     continue
 
-                current = tops.get(specialized_item)
-                # choose highest production bonus; treat None as -inf
-                cur_bonus = current.get("production_bonus") if current else None
-                if cur_bonus is None:
-                    cur_bonus_val = float("-inf")
+                region_list = self._unwrap_region_list(resp)
+                if not region_list:
+                    continue
+
+                # ---- Long-term leader: max(strategic + ethicSpec + ethicDeposit) ----
+                # ethicDepositBonus is semi-permanent (party ethics), only raw depositBonus is temporary
+                top_perm = max(
+                    region_list,
+                    key=lambda r: (r.get("strategicBonus") or 0) + (r.get("ethicSpecializationBonus") or 0) + (r.get("ethicDepositBonus") or 0),
+                )
+                perm_strategic = top_perm.get("strategicBonus") or 0
+                perm_ethic = top_perm.get("ethicSpecializationBonus") or 0
+                perm_ethic_dep = top_perm.get("ethicDepositBonus") or 0
+                perm_bonus = perm_strategic + perm_ethic + perm_ethic_dep
+                perm_rid = top_perm.get("regionId") or top_perm.get("region_id") or ""
+                perm_cid = region_to_cid.get(perm_rid)
+                perm_name = cid_to_country[perm_cid]["name"] if perm_cid in cid_to_country else "Unknown"
+
+                if perm_bonus > 0:
+                    change = await self._handle_permanent_leader(
+                        item, perm_cid or "unknown", perm_name, perm_bonus,
+                        perm_strategic, perm_ethic, perm_ethic_dep, now, market_channel_id
+                    )
+                    if change:
+                        changes.append(change)
                 else:
-                    cur_bonus_val = cur_bonus
+                    # Strategic bonus has dropped to 0 for all regions — clear any stale DB entry
+                    if self._db:
+                        try:
+                            await self._db.delete_top_specialization(item)
+                        except Exception:
+                            self.bot.logger.exception("Failed to clear stale permanent leader for %s", item)
 
-                this_bonus = pb if pb is not None else float("-inf")
-                if this_bonus > cur_bonus_val:
-                    tops[specialized_item] = {"country_id": str(cid), "country_name": name, "production_bonus": pb}
+                # ---- Short-term top (highest total: permanent + deposit) ----
+                deposit_regions = [r for r in region_list if (r.get("depositBonus") or 0) > 0]
+                if deposit_regions:
+                    top_dep = max(
+                        deposit_regions,
+                        key=lambda r: r.get("bonus") or 0,
+                    )
+                    dep_total = top_dep.get("bonus") or 0
+                    dep_deposit_raw = top_dep.get("depositBonus") or 0
+                    dep_ethic_dep_raw = top_dep.get("ethicDepositBonus") or 0
+                    dep_perm = (top_dep.get("strategicBonus") or 0) + (top_dep.get("ethicSpecializationBonus") or 0)
+                    dep_rid = top_dep.get("regionId") or top_dep.get("region_id") or ""
+                    dep_region_name = region_to_name.get(dep_rid, dep_rid)
+                    dep_cid = region_to_cid.get(dep_rid)
+                    dep_name = cid_to_country[dep_cid]["name"] if dep_cid in cid_to_country else "Unknown"
+                    dep_end_at = top_dep.get("depositEndAt") or top_dep.get("deposit_end_at") or ""
 
-            # compare with previous tops and notify on changes
-            changes: list[tuple[str, str, str]] = []
-            for item, top in tops.items():
-                try:
-                    prev = await self._db.get_top_specialization(item) if self._db else None
-                except Exception:
-                    prev = None
+                    change = await self._handle_deposit_top(
+                        item, dep_rid, dep_region_name, dep_cid or "unknown", dep_name,
+                        dep_total, dep_deposit_raw, dep_ethic_dep_raw, dep_perm, dep_end_at, now, market_channel_id,
+                    )
+                    if change:
+                        changes.append(change)
 
-                changed = False
-                prev_desc = None
-                if prev is None:
-                    changed = True
-                    prev_desc = "(none)"
-                else:
-                    # Only treat it as a change when the country owning the top specialization changes.
-                    # Changes to the production bonus for the same country should not trigger notifications.
-                    if prev.get("country_id") != top.get("country_id") and prev.get("production_bonus") != top.get("production_bonus"):
-                        changed = True
-                        prev_desc = f"{prev.get('country_name')} with bonus {prev.get('production_bonus')}%"
-
-                if changed:
-                    # send message to configured channel in every guild
-                    for guild in self.bot.guilds:
-                        channel = guild.get_channel(market_channel_id)
-                        if channel:
-                            old = prev_desc or "(none)"
-                            new = f"{top.get('country_name')} with bonus {top.get('production_bonus')}%"
-                            text = f"Specialization '{item}' new leader: {new} replacing {old}"
-                            try:
-                                await channel.send(text)
-                            except Exception:
-                                self.bot.logger.exception("Failed sending specialization update for item %s to guild %s", item, guild.name)
-
-                    # record change for caller reporting
-                    new_desc = f"{top.get('country_name')} ({top.get('country_id')}) bonus={top.get('production_bonus')}"
-                    changes.append((item, prev_desc or "(none)", new_desc))
-
-                # persist new top
-                if self._db:
-                    try:
-                        await self._db.set_top_specialization(item, top.get("country_id"), top.get("country_name"), float(top.get("production_bonus") or 0), now)
-                    except Exception:
-                        self.bot.logger.exception("Failed to persist top specialization for %s", item)
         except Exception as e:
-            self.bot.logger.error(f"Error sending hourly production check: {e}")
+            self.bot.logger.error("Error in production poll: %s", e)
             return []
 
         return changes
 
+    @staticmethod
+    def _get_permanent_bonus(country: dict) -> float | None:
+        """Country's permanent production bonus (strategic + party ethics, no deposit)."""
+        try:
+            rb = country.get("rankings", {}).get("countryProductionBonus")
+            if isinstance(rb, dict) and "value" in rb:
+                return float(rb["value"])
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _unwrap_region_list(api_response) -> list[dict]:
+        if isinstance(api_response, list):
+            return [r for r in api_response if isinstance(r, dict)]
+        if isinstance(api_response, dict):
+            result = api_response.get("result")
+            if isinstance(result, dict):
+                data = result.get("data")
+                if isinstance(data, list):
+                    return [r for r in data if isinstance(r, dict)]
+            for key in ("data", "items", "regions"):
+                v = api_response.get(key)
+                if isinstance(v, list):
+                    return [r for r in v if isinstance(r, dict)]
+        return []
+
+    async def _handle_permanent_leader(
+        self, item: str, country_id: str, country_name: str,
+        bonus: float, strategic_bonus: float, ethic_bonus: float, ethic_deposit_bonus: float,
+        now: str, channel_id: int,
+    ) -> tuple | None:
+        try:
+            prev = await self._db.get_top_specialization(item) if self._db else None
+        except Exception:
+            prev = None
+
+        changed = (
+            prev is None
+            or abs(float(prev.get("production_bonus") or 0) - float(bonus)) > 0.01
+        )
+
+        if changed and prev is not None:
+            old_desc = f"{prev.get('country_name')} ({prev.get('production_bonus')}%)"
+            for guild in self.bot.guilds:
+                channel = guild.get_channel(channel_id)
+                if channel:
+                    try:
+                        await channel.send(
+                            f"🏭 **{item}** permanent leader: **{country_name}** ({bonus}%) — was {old_desc}"
+                        )
+                    except Exception:
+                        self.bot.logger.exception("Failed sending permanent leader update for %s", item)
+
+        if self._db:
+            try:
+                await self._db.set_top_specialization(
+                    item, country_id, country_name, float(bonus), now,
+                    strategic_bonus=strategic_bonus, ethic_bonus=ethic_bonus,
+                    ethic_deposit_bonus=ethic_deposit_bonus,
+                )
+            except Exception:
+                self.bot.logger.exception("Failed to persist permanent leader for %s", item)
+
+        if changed and prev is not None:
+            old_desc = f"{prev.get('country_name')} ({prev.get('production_bonus')}%)"
+            return (item, old_desc, f"{country_name} ({bonus}%)")
+        return None
+
+    async def _handle_deposit_top(
+        self, item: str, region_id: str, region_name: str, country_id: str, country_name: str,
+        bonus: int, deposit_bonus: float, ethic_deposit_bonus: float,
+        permanent_bonus: float, deposit_end_at: str, now: str, channel_id: int,
+    ) -> tuple | None:
+        try:
+            prev = await self._db.get_deposit_top(item) if self._db else None
+        except Exception:
+            prev = None
+
+        prev_bonus = int(prev.get("bonus") or 0) if prev else 0
+        improved = int(bonus) > prev_bonus
+        is_new = prev is None
+
+        if improved or is_new:
+            duration = self._format_duration(deposit_end_at)
+            for guild in self.bot.guilds:
+                channel = guild.get_channel(channel_id)
+                if channel:
+                    try:
+                        await channel.send(
+                            f"⚡ **{item}** new short-term leader: **{region_name}** — "
+                            f"**{bonus}%** total"
+                            + (f" ⏳ {duration}" if duration else "")
+                        )
+                    except Exception:
+                        self.bot.logger.exception("Failed sending deposit update for %s", item)
+
+        if self._db:
+            try:
+                await self._db.set_deposit_top(
+                    item, region_id, region_name, country_id, country_name,
+                    bonus, deposit_bonus, ethic_deposit_bonus, permanent_bonus, deposit_end_at, now,
+                )
+            except Exception:
+                self.bot.logger.exception("Failed to persist deposit top for %s", item)
+
+        # Only emit a change tuple when a better deposit replaces the previous record
+        if improved and prev is not None:
+            old_region = prev.get("region_name") or prev.get("region_id") or "?"
+            return (f"{item} [deposit]", f"{old_region} ({prev_bonus}%)", f"{region_name} ({bonus}%)")
+        return None
+
+    @staticmethod
+    def _format_duration(iso_str: str) -> str | None:
+        from datetime import timezone
+        try:
+            end = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+            delta = end - datetime.now(timezone.utc)
+            if delta.total_seconds() <= 0:
+                return "expired"
+            hours, remainder = divmod(int(delta.total_seconds()), 3600)
+            minutes = remainder // 60
+            if hours >= 24:
+                days, hrs = divmod(hours, 24)
+                return f"{days}d {hrs}h" if hrs else f"{days}d"
+            return f"{hours}h {minutes}m" if minutes else f"{hours}h"
+        except Exception:
+            return None
+
+    @staticmethod
+    def _pct(v) -> str:
+        try:
+            return f"{float(v):.2f}%"
+        except (TypeError, ValueError):
+            return "0%"
+
+    @staticmethod
+    def _long_bd(t: dict) -> str:
+        parts: list[str] = []
+        if t.get("strategic_bonus"): parts.append(f"{t['strategic_bonus']}% strat")
+        if t.get("ethic_bonus"): parts.append(f"{t['ethic_bonus']}% eth")
+        if t.get("ethic_deposit_bonus"): parts.append(f"{t['ethic_deposit_bonus']}% eth.dep")
+        return " + ".join(parts)
+
+    @staticmethod
+    def _short_bd(d: dict) -> str:
+        parts: list[str] = []
+        if d.get("permanent_bonus"): parts.append(f"{d['permanent_bonus']}% perm")
+        if d.get("deposit_bonus"): parts.append(f"{d['deposit_bonus']}% dep")
+        if d.get("ethic_deposit_bonus"): parts.append(f"{d['ethic_deposit_bonus']}% eth.dep")
+        return " + ".join(parts)
+
+    # ------------------------------------------------------------------ #
+    # Daily citizen level cache                                            #
+    # ------------------------------------------------------------------ #
+
+    @tasks.loop(hours=24)
+    async def daily_citizen_refresh(self):
+        """Refresh citizen level cache for every country once per day.
+
+        Uses poll_state to persist the last-run timestamp so restarts don't
+        trigger a duplicate refresh within the same 24-hour window.
+        """
+        if not self._client or not self._db or not self._citizen_cache:
+            return
+
+        from datetime import timezone
+        now_utc = datetime.now(timezone.utc)
+
+        # Check if a refresh already happened in the last 24 hours
+        try:
+            last_run_str = await self._db.get_poll_state("citizen_refresh_last_run")
+            if last_run_str:
+                last_run = datetime.fromisoformat(last_run_str)
+                elapsed_h = (now_utc - last_run).total_seconds() / 3600
+                if elapsed_h < 24:
+                    self.bot.logger.info(
+                        "daily_citizen_refresh: skipping — last run %.1fh ago (< 24h)", elapsed_h
+                    )
+                    return
+        except Exception:
+            self.bot.logger.exception("daily_citizen_refresh: failed to read last-run state")
+
+        self.bot.logger.info("daily_citizen_refresh: starting full country sweep")
+        try:
+            all_countries = await self._client.get("/country.getAllCountries")
+        except Exception:
+            self.bot.logger.exception("daily_citizen_refresh: failed to fetch countries")
+            return
+
+        # Persist the start time before the sweep so a crash mid-run doesn't
+        # cause an immediate retry on next restart.
+        try:
+            await self._db.set_poll_state("citizen_refresh_last_run", now_utc.isoformat())
+        except Exception:
+            self.bot.logger.exception("daily_citizen_refresh: failed to save last-run state")
+
+        country_list = extract_country_list(all_countries)
+        total = len(country_list)
+        for i, country in enumerate(country_list, 1):
+            cid = cid_of(country)
+            name = country.get("name", cid)
+            self.bot.logger.info("daily_citizen_refresh: (%d/%d) %s", i, total, name)
+            try:
+                await self._citizen_cache.refresh_country(cid, name)
+            except Exception:
+                self.bot.logger.exception("daily_citizen_refresh: error refreshing %s", name)
+            await asyncio.sleep(2)
+        self.bot.logger.info("daily_citizen_refresh: complete (%d countries)", total)
+
+    @daily_citizen_refresh.before_loop
+    async def before_daily_citizen_refresh(self):
+        await self.bot.wait_until_ready()
+
+    # ------------------------------------------------------------------ #
+    # Commands — production                                                #
+    # ------------------------------------------------------------------ #
+
     @commands.command(name="poll_now")
     @commands.is_owner()
     async def poll_now(self, ctx: Context):
-        """Owner-only command to trigger a single production poll."""
+        """Trigger a single production poll immediately."""
         if not self._client:
             await ctx.send("API client not initialized.")
             return
@@ -297,53 +503,84 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         async def _run_and_report():
             async with self._poll_lock:
                 changes = await self._run_poll_once()
-
             if not changes:
                 try:
                     await channel.send("Production poll completed: no leadership changes detected.")
                 except Exception:
                     self.bot.logger.exception("Failed to send poll completion message")
                 return
-
-            # craft a concise report
-            lines = [f"Production poll completed — {len(changes)} change(s):"]
-            for item, prev, new in changes:
-                lines.append(f"• {item}: {new} (replaced {prev})")
-
-            # send report in chunks if necessary
             try:
-                await channel.send("\n".join(lines))
+                lines = []
+                for item, prev, new in changes:
+                    is_deposit = item.endswith(" [deposit]")
+                    base = item[:-10] if is_deposit else item
+                    # new/prev are like "Turkey (62.75%)" or "Bahamas (73%)"
+                    if is_deposit:
+                        lines.append(
+                            f"⚡ Deposit **{base}** new leader: **{new}** ← was {prev}"
+                        )
+                    else:
+                        lines.append(
+                            f"🏭 Specialization **{base}** new leader: **{new}** ← was {prev}"
+                        )
+                await channel.send(f"Production poll — {len(changes)} change(s):\n" + "\n".join(lines))
             except Exception:
                 self.bot.logger.exception("Failed to send poll report")
 
-        # run in background to avoid blocking the command
         asyncio.create_task(_run_and_report())
 
-    @commands.command(name="simulate_prev_top")
+    @commands.command(name="fake_leader")
     @commands.is_owner()
-    async def simulate_prev_top(self, ctx: Context, item: str, country_id: str, country_name: str, bonus: float):
-        """Insert or replace a previous top for `item` to simulate a future change.
+    async def fake_leader(self, ctx: Context):
+        """Set all stored production bonuses to 0 so the next !poll_now reports changes.
 
-        Usage: `!simulate_prev_top cookedFish fakeid Oldland 10.0`
+        Useful for testing: run !fake_leader, then !poll_now.  Every item whose
+        actual bonus is > 0 will appear as a leadership change.
         """
         if not self._db:
             await ctx.send("Database not initialized.")
             return
-        now = datetime.utcnow().isoformat() + "Z"
         try:
-            await self._db.set_top_specialization(item, country_id, country_name, float(bonus), now)
-            await ctx.send(f"Simulated previous top for '{item}' -> {country_name} ({country_id}) bonus={bonus}")
+            await self._db._conn.execute("UPDATE specialization_top SET production_bonus = 0")
+            await self._db._conn.execute("UPDATE deposit_top SET bonus = 0")
+            await self._db._conn.commit()
+            rows = await self._db._conn.execute("SELECT COUNT(*) FROM specialization_top")
+            count = (await rows.fetchone())[0]
+            if count == 0:
+                await ctx.send(
+                    "Tables are empty — run `!poll_now` first to populate them, then `!fake_leader`, then `!poll_now` again."
+                )
+            else:
+                await ctx.send(
+                    f"All stored bonuses zeroed ({count} items). Run `!poll_now` — every item with a real bonus will show as a new leader."
+                )
         except Exception:
-            self.bot.logger.exception("Failed to simulate previous top")
-            await ctx.send("Failed to simulate previous top; see logs.")
+            self.bot.logger.exception("fake_leader: failed to update DB")
+            await ctx.send("DB update failed; see logs.")
 
+    # ------------------------------------------------------------------ #
+    # Helper — primary colour for embeds                                   #
+    # ------------------------------------------------------------------ #
 
-    @commands.command(name="leaders")
-    async def leaders(self, ctx: Context):
+    def _embed_colour(self) -> discord.Colour:
+        raw = (self.config.get("colors") or {}).get("primary", "0xffb612")
+        try:
+            return discord.Colour(int(str(raw), 16))
+        except Exception:
+            return discord.Colour.gold()
+
+    # ------------------------------------------------------------------ #
+    # /bonus                                                               #
+    # ------------------------------------------------------------------ #
+
+    @commands.hybrid_command(name="bonus", description="Show production leaders for every item.")
+    async def bonus(self, ctx: Context):
         """Display the current production leaders for each specialization."""
         if not self._db:
             await ctx.send("Database not initialized.")
             return
+        if hasattr(ctx, 'defer'):
+            await ctx.defer()
         try:
             tops = await self._db.get_all_tops()
         except Exception:
@@ -351,31 +588,394 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             await ctx.send("Failed to fetch production leaders; see logs.")
             return
 
-        if not tops:
+        deposit_tops: list[dict] = []
+        try:
+            deposit_tops = await self._db.get_all_deposit_tops()
+        except Exception:
+            pass
+
+        if not tops and not deposit_tops:
             await ctx.send("No production leaders recorded.")
             return
 
-        lines = []
-        for t in tops:
-            pb = t.get("production_bonus")
-            pb_text = f" bonus={pb}" if pb is not None else ""
-            lines.append(f"{t.get('item')}: {t.get('country_name')} ({t.get('country_id')}){pb_text}")
+        dep_by_item = {d.get("item"): d for d in deposit_tops}
+        top_by_item = {t.get("item"): t for t in tops}
+        all_items = sorted(set(top_by_item) | set(dep_by_item))
 
-        # Send in a single message if small, otherwise chunk
-        message = "\n".join(lines)
+        long_rows = [(item, top_by_item[item]) for item in all_items if item in top_by_item]
+        short_rows = [(item, dep_by_item[item]) for item in all_items if item in dep_by_item]
+
+        best_l_idx = (
+            max(range(len(long_rows)), key=lambda i: float(long_rows[i][1].get("production_bonus") or 0))
+            if long_rows else None
+        )
+        best_s_idx = (
+            max(range(len(short_rows)), key=lambda i: float(short_rows[i][1].get("bonus") or 0))
+            if short_rows else None
+        )
+
+        colour = self._embed_colour()
+
+        # ── Long-term embed ──────────────────────────────────────────────
+        if long_rows:
+            wi = max(max(len(item) for item, _ in long_rows), 4)
+            wc = max(max(len(t.get("country_name") or "") for _, t in long_rows), 7)
+            wb = max(max(len(self._pct(t.get("production_bonus"))) for _, t in long_rows), 5)
+            bds_l = [self._long_bd(t) for _, t in long_rows]
+            wbd = max(max(len(bd) for bd in bds_l), 9)
+            hdr_l = f"  {'Item':<{wi}}  {'Country':<{wc}}  {'Bonus':>{wb}}  {'Breakdown':<{wbd}}"
+            sep_l = "  " + "-" * (len(hdr_l) - 2)
+            rows_l = [
+                f"{'>' if i == best_l_idx else ' '} {item:<{wi}}  {(t.get('country_name') or 'Unknown'):<{wc}}  {self._pct(t.get('production_bonus')):>{wb}}  {bd:<{wbd}}"
+                for i, ((item, t), bd) in enumerate(zip(long_rows, bds_l))
+            ]
+            table_l = "\n".join([hdr_l, sep_l] + rows_l)
+        else:
+            table_l = "(none)"
+
+        if short_rows:
+            wi2 = max(max(len(item) for item, _ in short_rows), 4)
+            wr = max(max(len(d.get("region_name") or d.get("region_id") or "") for _, d in short_rows), 6)
+            wb2 = max(max(len(self._pct(d.get("bonus"))) for _, d in short_rows), 5)
+            bds_s = [self._short_bd(d) for _, d in short_rows]
+            durs = [self._format_duration(d.get("deposit_end_at") or "") or "" for _, d in short_rows]
+            wbd2 = max(max(len(bd) for bd in bds_s), 9)
+            wdur = max(max(len(dur) for dur in durs), 7)
+            hdr_s = f"  {'Item':<{wi2}}  {'Region':<{wr}}  {'Bonus':>{wb2}}  {'Breakdown':<{wbd2}}  {'Expires':<{wdur}}"
+            sep_s = "  " + "-" * (len(hdr_s) - 2)
+            rows_s = [
+                f"{'>' if i == best_s_idx else ' '} {item:<{wi2}}  {(d.get('region_name') or d.get('region_id') or '?'):<{wr}}  {self._pct(d.get('bonus')):>{wb2}}  {bd:<{wbd2}}  {dur:<{wdur}}"
+                for i, ((item, d), bd, dur) in enumerate(zip(short_rows, bds_s, durs))
+            ]
+            table_s = "\n".join([hdr_s, sep_s] + rows_s)
+        else:
+            table_s = "(none)"
+
+        MSG_LIMIT = 1900  # plain message limit with safe margin
+
+        async def _send_table(title: str, table_text: str) -> None:
+            """Send table as plain code-block message(s) — full channel width."""
+            lines = table_text.splitlines()
+            header_lines = lines[:2]
+            data_lines = lines[2:]
+            chunks: list[list[str]] = []
+            chunk: list[str] = []
+            for line in data_lines:
+                body = "\n".join(header_lines + chunk + [line])
+                if len(f"**{title}**\n```\n{body}\n```") > MSG_LIMIT and chunk:
+                    chunks.append(chunk)
+                    chunk = [line]
+                else:
+                    chunk.append(line)
+            if chunk:
+                chunks.append(chunk)
+            for idx, ch in enumerate(chunks):
+                chunk_title = title if idx == 0 else f"{title} (cont.)"
+                block = f"**{chunk_title}**\n```\n" + "\n".join(header_lines + ch) + "\n```"
+                await ctx.send(block)
+
+        await _send_table("📈 Long-term leaders", table_l)
+        await _send_table("⚡ Short-term leaders", table_s)
+
+        # Best-of summary as a compact embed
+        best_embed = discord.Embed(colour=colour)
+        if best_l_idx is not None:
+            bl_item, bl = long_rows[best_l_idx]
+            best_embed.add_field(
+                name="🏆 Best long-term",
+                value=f"**{bl_item}** — {bl.get('country_name')} **{bl.get('production_bonus')}%**",
+                inline=False,
+            )
+        if best_s_idx is not None:
+            bs_item, bs = short_rows[best_s_idx]
+            rl = bs.get("region_name") or bs.get("region_id") or "?"
+            dur = self._format_duration(bs.get("deposit_end_at") or "")
+            best_embed.add_field(
+                name="⚡ Best short-term",
+                value=(
+                    f"**{bs_item}** — {rl} **{bs.get('bonus')}%**"
+                    + (f"  ⏳ {dur}" if dur else "")
+                ),
+                inline=False,
+            )
+        if best_embed.fields:
+            await ctx.send(embed=best_embed)
+
+    # ------------------------------------------------------------------ #
+    # /topbonus                                                            #
+    # ------------------------------------------------------------------ #
+
+    @commands.hybrid_command(name="topbonus", description="Show the single best long-term and short-term bonus.")
+    async def topbonus(self, ctx: Context):
+        """Show the single best long-term and best short-term production bonus."""
+        if not self._db:
+            await ctx.send("Database not initialized.")
+            return
+        if hasattr(ctx, 'defer'):
+            await ctx.defer()
+        tops: list[dict] = []
+        deposit_tops: list[dict] = []
         try:
-            await ctx.send(message)
+            tops = await self._db.get_all_tops()
+            deposit_tops = await self._db.get_all_deposit_tops()
         except Exception:
-            self.bot.logger.exception("Failed to send production leaders message")
+            self.bot.logger.exception("Failed to fetch production data")
+            await ctx.send("Failed to fetch production data; see logs.")
+            return
+
+        if not tops and not deposit_tops:
+            await ctx.send("No production data recorded yet.")
+            return
+
+        colour = self._embed_colour()
+        embed = discord.Embed(title="Top Production Bonuses", colour=colour)
+
+        if tops:
+            bl = max(tops, key=lambda t: float(t.get("production_bonus") or 0))
+            bd = self._long_bd(bl)
+            embed.add_field(
+                name="🏆 Best long-term",
+                value=(
+                    f"**{bl.get('item')}** — {bl.get('country_name')} **{bl.get('production_bonus')}%**"
+                    + (f"\n*{bd}*" if bd else "")
+                ),
+                inline=False,
+            )
+        if deposit_tops:
+            bs = max(deposit_tops, key=lambda d: float(d.get("bonus") or 0))
+            rl = bs.get("region_name") or bs.get("region_id") or "?"
+            dur = self._format_duration(bs.get("deposit_end_at") or "")
+            bd = self._short_bd(bs)
+            embed.add_field(
+                name="⚡ Best short-term",
+                value=(
+                    f"**{bs.get('item')}** — {rl} **{bs.get('bonus')}%**"
+                    + (f"  ⏳ {dur}" if dur else "")
+                    + (f"\n*{bd}*" if bd else "")
+                ),
+                inline=False,
+            )
+        await ctx.send(embed=embed)
+
+    @commands.command(name="clear_production")
+    @commands.is_owner()
+    async def clear_production(self, ctx: Context):
+        """Wipe all rows from specialization_top and deposit_top.
+
+        The next poll will repopulate them from scratch.
+        """
+        if not self._db:
+            await ctx.send("Database not initialized.")
+            return
+        try:
+            await self._db._conn.execute("DELETE FROM specialization_top")
+            await self._db._conn.execute("DELETE FROM deposit_top")
+            await self._db._conn.commit()
+            await ctx.send("✅ Cleared `specialization_top` and `deposit_top`. Run `!poll_now` to repopulate.")
+        except Exception:
+            self.bot.logger.exception("Failed to clear production tables")
+            await ctx.send("Failed to clear tables; see logs.")
+
+    # ------------------------------------------------------------------ #
+    # Commands — citizen levels                                            #
+    # ------------------------------------------------------------------ #
+
+    @commands.hybrid_command(name="leveldist", description="Show citizen level distribution for a country.")
+    @app_commands.describe(
+        country="Country code or name (e.g. NL or Netherlands)",
+        all_levels="Show individual levels instead of buckets of 5",
+    )
+    async def leveldist(self, ctx: Context, country: str, all_levels: bool = False):
+        """Show the cached level distribution for a country.
+
+        Accepts a country code or name.
+        Usage: ``/leveldist NL``  or  ``/leveldist Netherlands all_levels:True``
+        Prefix shorthand: ``!leveldist NL all``  (trailing 'all' enables all_levels)
+        """
+        # Prefix mode swallows all_levels into the country string; strip it here.
+        if country.lower().endswith(" all"):
+            country = country[:-4].strip()
+            all_levels = True
+
+        if not self._db or not self._client:
+            await ctx.send("Services not initialized.")
+            return
+
+        if hasattr(ctx, 'defer'):
+            await ctx.defer()
+        country_list = await self._fetch_country_list(ctx)
+        if country_list is None:
+            return
+
+        target = find_country(country, country_list)
+        if target is None:
+            sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
+            await ctx.send(f"Country `{country}` not found. Sample codes: {sample}…")
+            return
+
+        cid = cid_of(target)
+        country_name = target.get("name", country)
+
+        try:
+            level_counts, last_updated = await self._db.get_level_distribution(cid)
+        except Exception as exc:
+            await ctx.send(f"Database error: {exc}")
+            return
+
+        if not level_counts:
+            await ctx.send(
+                f"No cached level data for **{country_name}** yet.\n"
+                f"Run `/poll_citizens {country}` to build the cache."
+            )
+            return
+
+        total = sum(level_counts.values())
+        colour = self._embed_colour()
+
+        if all_levels:
+            # Individual level rows
+            max_level = max(level_counts)
+            bar_max = max(level_counts.values())
+            bar_scale = 20 / bar_max
+            header = f"{'Lvl':>4}  {'Count':>6}  Bar"
+            sep = "─" * 32
+            data_rows = [
+                f"{lvl:>4}  {level_counts[lvl]:>6}  {'█' * max(1, round(level_counts[lvl] * bar_scale))}"
+                for lvl in range(1, max_level + 1)
+                if lvl in level_counts
+            ]
+        else:
+            # Bucket rows of 5 levels
+            max_level = max(level_counts)
+            buckets: dict[int, int] = {}
+            for lvl, cnt in level_counts.items():
+                bucket = ((lvl - 1) // 5) * 5 + 1
+                buckets[bucket] = buckets.get(bucket, 0) + cnt
+            bar_max = max(buckets.values())
+            bar_scale = 20 / bar_max
+            header = f"{'Levels':<9}  {'Count':>6}  Bar"
+            sep = "─" * 34
+            data_rows = [
+                f"{b:>3}–{min(b+4, max_level):<3}  {buckets[b]:>6}  {'█' * max(1, round(buckets[b] * bar_scale))}"
+                for b in sorted(buckets)
+            ]
+
+        # Send paginated embeds — chunk by character length, not row count
+        EMBED_LIMIT = 3900
+        label = "All levels" if all_levels else "5-level buckets"
+        footer_text = (
+            f"{total} citizens  •  {label}"
+            + (f"  •  Updated: {last_updated} UTC" if last_updated else "")
+        )
+
+        chunks: list[list[str]] = []
+        current: list[str] = []
+        for row in data_rows:
+            candidate = "\n".join(current + [row])
+            if len(f"```\n{header}\n{sep}\n{candidate}\n```") > EMBED_LIMIT and current:
+                chunks.append(current)
+                current = [row]
+            else:
+                current.append(row)
+        if current:
+            chunks.append(current)
+
+        for page_idx, chunk in enumerate(chunks):
+            block = f"```\n{header}\n{sep}\n" + "\n".join(chunk) + "\n```"
+            embed = discord.Embed(
+                title=f"Level distribution — {country_name}",
+                description=block,
+                colour=colour,
+            )
+            embed.set_footer(text=(
+                footer_text if page_idx == 0
+                else f"{total} citizens  •  {label} (cont.)"
+            ))
+            await ctx.send(embed=embed)
+
+    @commands.hybrid_command(name="poll_citizens", description="Refresh citizen level cache.")
+    @app_commands.describe(country="Country code or name, or leave blank for all countries")
+    @_has_privileged_role()
+    async def poll_citizens(self, ctx: Context, country: str | None = None):
+        """Refresh the citizen level cache for one country, or all countries if no argument given.
+
+        Usage: ``/poll_citizens NL``  or  ``/poll_citizens`` (all)
+        """
+        if not self._client or not self._db or not self._citizen_cache:
+            await ctx.send("Services not initialized.")
+            return
+
+        if hasattr(ctx, 'defer'):
+            await ctx.defer()
+        country_list = await self._fetch_country_list(ctx)
+        if country_list is None:
+            return
+
+        if country:
+            target = find_country(country, country_list)
+            if target is None:
+                await ctx.send(f"Country `{country}` not found.")
+                return
+            countries = [target]
+        else:
+            countries = country_list
+
+        n = len(countries)
+        label = f"**{countries[0].get('name', country)}**" if n == 1 else f"**{n}** countries"
+        status_msg = await ctx.send(f"Starting citizen level refresh for {label}…")
+
+        import time
+        t_start = time.monotonic()
+        total_recorded = 0
+        failed: list[str] = []
+        for i, c in enumerate(countries, 1):
+            cid = cid_of(c)
+            name = c.get("name", cid)
+            if n > 1:
+                await status_msg.edit(content=f"Refreshing citizen levels… ({i}/{n}) **{name}**")
+            try:
+                recorded = await self._citizen_cache.refresh_country(
+                    cid, name,
+                    progress_msg=status_msg if n == 1 else None,
+                )
+                total_recorded += recorded
+                self.bot.logger.info("poll_citizens: %s — %d levels cached", name, recorded)
+            except Exception:
+                self.bot.logger.exception("poll_citizens: error for %s", name)
+                failed.append(name)
+
+        elapsed = time.monotonic() - t_start
+        elapsed_str = (
+            f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
+            if elapsed >= 60
+            else f"{elapsed:.1f}s"
+        )
+        if n == 1:
+            summary = f"Citizen level cache refreshed for **{countries[0].get('name', country)}** — {total_recorded} levels stored. ⏱ {elapsed_str}"
+        else:
+            summary = f"Citizen level cache refreshed for **{n}** countries — {total_recorded} levels stored. ⏱ {elapsed_str}"
+        if failed:
+            summary += f"\nFailed: {', '.join(failed)}"
+        await status_msg.edit(content=summary)
+
+    # ------------------------------------------------------------------ #
+    # Internal helpers                                                     #
+    # ------------------------------------------------------------------ #
+
+    async def _fetch_country_list(self, ctx: Context) -> list[dict] | None:
+        """Fetch and unwrap the country list; sends an error to ctx on failure."""
+        try:
+            resp = await self._client.get("/country.getAllCountries")
+        except Exception as exc:
+            await ctx.send(f"Failed to fetch countries: {exc}")
+            return None
+        result = extract_country_list(resp)
+        if not result:
+            await ctx.send("Could not retrieve country list from API.")
+            return None
+        return result
 
 
-    @hourly_production_check.before_loop
-    async def before_hourly_production_check(self):
-        """Ensure the bot is ready before starting the scheduled task."""
-        await self.bot.wait_until_ready()
-
-
-
-# And then we finally add the cog to the bot so that it can load, unload, reload and use it's content.
 async def setup(bot) -> None:
     await bot.add_cog(ProductionChecker(bot))
+
