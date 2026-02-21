@@ -239,13 +239,18 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                         except Exception:
                             self.bot.logger.exception("Failed to clear stale permanent leader for %s", item)
 
-                # ---- Short-term top (highest total: permanent + deposit) ----
+                # ---- Short-term top (longest remaining deposit duration) ----
                 deposit_regions = [r for r in region_list if (r.get("depositBonus") or 0) > 0]
                 if deposit_regions:
-                    top_dep = max(
-                        deposit_regions,
-                        key=lambda r: r.get("bonus") or 0,
-                    )
+                    def _end_ts(r: dict) -> float:
+                        raw = r.get("depositEndAt") or r.get("deposit_end_at") or ""
+                        try:
+                            from datetime import timezone
+                            return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+                        except Exception:
+                            return 0.0
+
+                    top_dep = max(deposit_regions, key=_end_ts)
                     dep_total = top_dep.get("bonus") or 0
                     dep_deposit_raw = top_dep.get("depositBonus") or 0
                     dep_ethic_dep_raw = top_dep.get("ethicDepositBonus") or 0
@@ -348,11 +353,19 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         except Exception:
             prev = None
 
-        prev_bonus = int(prev.get("bonus") or 0) if prev else 0
-        improved = int(bonus) > prev_bonus
-        is_new = prev is None
+        def _ts(iso: str) -> float:
+            try:
+                return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+            except Exception:
+                return 0.0
 
-        if improved or is_new:
+        prev_end_ts = _ts(prev.get("deposit_end_at") or "") if prev else 0.0
+        new_end_ts = _ts(deposit_end_at)
+        is_new = prev is None
+        # Report a change when the region changed OR the deposit lasts longer than what we stored
+        changed = is_new or (prev.get("region_id") != region_id) or (new_end_ts > prev_end_ts + 60)
+
+        if changed and not is_new:
             duration = self._format_duration(deposit_end_at)
             for guild in self.bot.guilds:
                 channel = guild.get_channel(channel_id)
@@ -375,10 +388,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             except Exception:
                 self.bot.logger.exception("Failed to persist deposit top for %s", item)
 
-        # Only emit a change tuple when a better deposit replaces the previous record
-        if improved and prev is not None:
+        # Only emit a change tuple when the leader actually changed
+        if changed and not is_new:
             old_region = prev.get("region_name") or prev.get("region_id") or "?"
-            return (f"{item} [deposit]", f"{old_region} ({prev_bonus}%)", f"{region_name} ({bonus}%)")
+            old_bonus = prev.get("bonus") or 0
+            return (f"{item} [deposit]", f"{old_region} ({old_bonus}%)", f"{region_name} ({bonus}%)")
         return None
 
     @staticmethod
