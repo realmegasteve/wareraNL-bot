@@ -51,8 +51,13 @@ class CitizenCache:
         recorded = 0
         for i, (uid, obj) in enumerate(zip(user_ids, results)):
             lvl = self._extract_level(obj)
+            mode = self._extract_skill_mode(obj)
+            reset_at = self._extract_last_skills_reset_at(obj)
             if lvl is not None:
-                await self._db.upsert_citizen_level(uid, country_id, lvl, updated_at)
+                await self._db.upsert_citizen_level(
+                    uid, country_id, lvl, updated_at,
+                    skill_mode=mode, last_skills_reset_at=reset_at,
+                )
                 recorded += 1
 
             if (i + 1) % (batch_size * 2) == 0:
@@ -144,4 +149,53 @@ class CitizenCache:
             return int(obj["rankings"]["userLevel"]["value"])
         except (KeyError, TypeError, ValueError):
             pass
+        return None
+
+    @staticmethod
+    def _extract_skill_mode(obj: Any) -> str | None:
+        """Classify a player as 'eco' or 'war' based on where they spent skill points.
+
+        Points spent in skill at level L = L*(L+1)//2.
+        Eco skills : entrepreneurship, energy, production, companies, management.
+        War skills : attack, health, hunger, criticalChance, criticalDamages,
+                     armor, precision, dodge, lootChance.
+        Ties go to eco.
+        Returns None when no skill data is available.
+        """
+        if not isinstance(obj, dict):
+            return None
+        skills = obj.get("skills")
+        if not isinstance(skills, dict):
+            return None
+        eco_names = {"entrepreneurship", "energy", "production", "companies", "management"}
+        war_names = {"attack", "health", "hunger", "criticalChance", "criticalDamages",
+                     "armor", "precision", "dodge", "lootChance"}
+        eco_pts = 0
+        war_pts = 0
+        for name, sdata in skills.items():
+            if not isinstance(sdata, dict):
+                continue
+            lv = int(sdata.get("level") or 0)
+            pts = lv * (lv + 1) // 2
+            if name in eco_names:
+                eco_pts += pts
+            elif name in war_names:
+                war_pts += pts
+        return "eco" if eco_pts >= war_pts else "war"
+
+    @staticmethod
+    def _extract_last_skills_reset_at(obj: Any) -> str | None:
+        """Pull the lastSkillsResetAt ISO timestamp from a getUserLite result.
+
+        The value lives inside the nested ``dates`` object and is absent when
+        the player has never reset their skills.
+        """
+        if not isinstance(obj, dict):
+            return None
+        dates = obj.get("dates")
+        if not isinstance(dates, dict):
+            return None
+        val = dates.get("lastSkillsResetAt")
+        if isinstance(val, str) and val:
+            return val
         return None

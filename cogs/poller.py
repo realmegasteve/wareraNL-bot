@@ -847,10 +847,18 @@ class ProductionChecker(commands.Cog, name="production_checker"):
 
         colour = self._embed_colour()
 
+        def _fmt_h(h: float) -> str:
+            """Format a duration in hours as e.g. '7h' or '3d5h'."""
+            total_h = round(h)
+            if total_h < 24:
+                return f"{total_h}h"
+            d, rem = divmod(total_h, 24)
+            return f"{d}d{rem}h"
+
         # ── ANSI colour codes (Discord ansi code block) ──────────────────
-        G = "\u001b[32m"   # green  — ≤ 72 h
-        Y = "\u001b[33m"   # yellow — 73–120 h
-        R = "\u001b[31m"   # red    — > 120 h / ∞
+        G = "\u001b[32m"   # green  — ≤ 3 d
+        Y = "\u001b[33m"   # yellow — 3–5 d
+        R = "\u001b[31m"   # red    — > 5 d / ∞
         RESET = "\u001b[0m"
 
         def _col(h: float) -> str:
@@ -866,7 +874,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             )
             if bonus_gain <= 0:
                 embed = discord.Embed(
-                    title="Break-even hours — company relocation",
+                    title="Break-even time — company relocation",
                     description=(
                         f"{assumption}\n\n"
                         f"The new bonus is not higher than your current bonus — move gives no gain."
@@ -878,11 +886,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 for lv in levels:
                     extra_per_hour = lv * (bonus_gain / 100) * avg_pp_value
                     h = move_cost / extra_per_hour
-                    level_lines.append(f"Level {lv}: **{h:.0f}h**")
+                    level_lines.append(f"Level {lv}: **{_fmt_h(h)}**")
                 embed = discord.Embed(
-                    title="Break-even hours — company relocation",
+                    title="Break-even time — company relocation",
                     description=(
-                        f"Hours of Automated Engine production to recover the move cost.\n"
+                        f"Automated Engine production time to recover the move cost.\n"
                         f"{assumption}\n\n"
                         + "\n".join(level_lines)
                         + f"\n\n**Move cost:** 5 × {concrete_price:.2f} = **{move_cost:.2f} coins**\n"
@@ -895,7 +903,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
 
         # ── Full table ────────────────────────────────────────────────────
         bonuses = list(range(5, 85, 5))   # 5 % … 80 % in steps of 5
-        CELL = 5  # visual chars per cell (e.g. "  45h")
+        CELL = 6  # visual chars per cell (e.g. "  45h" or "3d5h")
 
         # "Automated Engine Level" centred over the level columns
         level_cols_width = 6 * len(levels)
@@ -916,7 +924,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 else:
                     extra_per_hour = lv * (bonus_gain / 100) * avg_pp_value
                     h = move_cost / extra_per_hour
-                    cells.append(f"{_col(h)}{f'{h:.0f}h':>{CELL}}{RESET}")
+                    cells.append(f"{_col(h)}{_fmt_h(h):>{CELL}}{RESET}")
             rows.append(f" {b:>3}% │" + "".join(f" {c}" for c in cells))
 
         table = (
@@ -940,9 +948,9 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 "and optionally a target bonus as a second number (e.g. `/movecost 30 55`)."
             )
         embed = discord.Embed(
-            title="Break-even hours — company relocation",
+            title="Break-even time — company relocation",
             description=(
-                f"Hours of Automated Engine production to recover the move cost.\n"
+                f"Automated Engine production time to recover the move cost.\n"
                 f"{assumption}\n\n"
                 f"**Move cost:** 5 × {concrete_price:.2f} = **{move_cost:.2f} coins**\n"
                 f"**PP value avg:** {avg_pp_value:.4f} coins/pp"
@@ -1012,41 +1020,47 @@ class ProductionChecker(commands.Cog, name="production_checker"):
     # Commands — citizen levels                                            #
     # ------------------------------------------------------------------ #
 
-    @commands.hybrid_command(name="leveldist", description="Show citizen level distribution for a country.")
+    @commands.hybrid_command(name="leveldist", description="Show citizen level distribution for a country (or all).")
     @app_commands.describe(
-        country="Country code or name (e.g. NL or Netherlands)",
+        country="Country code or name (e.g. NL or Netherlands), or leave blank for all countries.",
         all_levels="Show individual levels instead of buckets of 5",
     )
-    async def leveldist(self, ctx: Context, country: str, all_levels: bool = False):
-        """Show the cached level distribution for a country.
+    async def leveldist(self, ctx: Context, country: str | None = None, all_levels: bool = False):
+        """Show the cached level distribution for a country, or all countries if no argument given.
 
         Accepts a country code or name.
-        Usage: ``/leveldist NL``  or  ``/leveldist Netherlands all_levels:True``
+        Usage: ``/leveldist NL``  ``/leveldist Netherlands all_levels:True``  ``/leveldist`` (all)
         Prefix shorthand: ``!leveldist NL all``  (trailing 'all' enables all_levels)
         """
-        # Prefix mode swallows all_levels into the country string; strip it here.
-        if country.lower().endswith(" all"):
-            country = country[:-4].strip()
+        # Prefix mode may pass all_levels inside the country string; strip it here.
+        if country and country.lower().endswith(" all"):
+            country = country[:-4].strip() or None
             all_levels = True
 
-        if not self._db or not self._client:
+        if not self._db:
             await ctx.send("Services not initialized.")
             return
 
         if hasattr(ctx, 'defer'):
             await ctx.defer()
-        country_list = await self._fetch_country_list(ctx)
-        if country_list is None:
-            return
 
-        target = find_country(country, country_list)
-        if target is None:
-            sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
-            await ctx.send(f"Country `{country}` not found. Sample codes: {sample}…")
-            return
+        country_name = "All countries"
+        cid: str | None = None
 
-        cid = cid_of(target)
-        country_name = target.get("name", country)
+        if country:
+            if not self._client:
+                await ctx.send("API client not initialized.")
+                return
+            country_list = await self._fetch_country_list(ctx)
+            if country_list is None:
+                return
+            target = find_country(country, country_list)
+            if target is None:
+                sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
+                await ctx.send(f"Country `{country}` not found. Sample codes: {sample}…")
+                return
+            cid = cid_of(target)
+            country_name = target.get("name", country)
 
         try:
             level_counts, last_updated = await self._db.get_level_distribution(cid)
@@ -1057,7 +1071,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         if not level_counts:
             await ctx.send(
                 f"No cached level data for **{country_name}** yet.\n"
-                f"Run `/poll_citizens {country}` to build the cache."
+                f"Run `/poll_citizens{' ' + country if country else ''}` to build the cache."
             )
             return
 
@@ -1123,6 +1137,276 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 footer_text if page_idx == 0
                 else f"{total} citizens  •  {label} (cont.)"
             ))
+            await ctx.send(embed=embed)
+
+    @commands.hybrid_command(name="skilldist", description="Show eco vs war skill distribution for a country (or all).")
+    @app_commands.describe(country="Country code or name, or leave blank for all countries combined.")
+    async def skilldist(self, ctx: Context, country: str | None = None):
+        """Show eco vs war distribution per 5-level bucket, followed by the overall totals.
+
+        A citizen is classified as eco when most of their skill points are in
+        entrepreneurship, energy, production, companies, or management.
+        All other skills (attack, health, hunger, etc.) count as war skills.
+        Ties go to eco.
+
+        Usage: ``/skills NL``  or  ``/skills`` (all countries)
+        """
+        if not self._db:
+            await ctx.send("Database not initialized.")
+            return
+        if hasattr(ctx, "defer"):
+            await ctx.defer()
+
+        country_name = "All countries"
+        cid: str | None = None
+
+        if country:
+            if not self._client:
+                await ctx.send("API client not initialized.")
+                return
+            country_list = await self._fetch_country_list(ctx)
+            if country_list is None:
+                return
+            target = find_country(country, country_list)
+            if target is None:
+                sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
+                await ctx.send(f"Country `{country}` not found. Sample codes: {sample}…")
+                return
+            cid = cid_of(target)
+            country_name = target.get("name", country)
+
+        try:
+            buckets, last_updated = await self._db.get_skill_mode_by_level_buckets(cid)
+        except Exception as exc:
+            await ctx.send(f"Database error: {exc}")
+            return
+
+        if not buckets:
+            msg = (
+                f"No citizen skill data cached for **{country_name}** yet.\n"
+                f"Run `/poll_citizens{' ' + country if country else ''}` to build the cache."
+            )
+            await ctx.send(msg)
+            return
+
+        max_bucket = max(buckets)
+        total_eco = sum(v["eco"] for v in buckets.values())
+        total_war = sum(v["war"] for v in buckets.values())
+        total_unknown = sum(v["unknown"] for v in buckets.values())
+        total = total_eco + total_war + total_unknown
+
+        # ── Per-bucket table ──────────────────────────────────────────────
+        BAR_W = 12
+        header = f"{'Levels':<9}  {'Eco':>5}  {'War':>5}  {'%Eco':>5}  Distribution"
+        sep = "─" * (9 + 2 + 5 + 2 + 5 + 2 + 5 + 2 + BAR_W + 4)
+
+        data_rows: list[str] = []
+        for b in sorted(buckets):
+            bl = buckets[b]
+            eco_n = bl["eco"]
+            war_n = bl["war"]
+            known = eco_n + war_n
+            eco_pct = eco_n / known * 100 if known else 0.0
+            filled = round(eco_n / known * BAR_W) if known else 0
+            bar = "█" * filled + "░" * (BAR_W - filled)
+            b_end = min(b + 4, max_bucket + 4)
+            data_rows.append(
+                f" {b:>3}–{b_end:<3}  {eco_n:>5}  {war_n:>5}  {eco_pct:>4.0f}%  {bar}"
+            )
+
+        colour = self._embed_colour()
+        EMBED_LIMIT = 3900
+        chunks: list[list[str]] = []
+        current: list[str] = []
+        for row in data_rows:
+            candidate = "\n".join(current + [row])
+            if len(f"```\n{header}\n{sep}\n{candidate}\n```") > EMBED_LIMIT and current:
+                chunks.append(current)
+                current = [row]
+            else:
+                current.append(row)
+        if current:
+            chunks.append(current)
+
+        footer_parts = [f"{total} citizens total"]
+        if total_unknown > 0:
+            footer_parts.append(f"{total_unknown} without skill data")
+        if last_updated:
+            footer_parts.append(f"Updated: {last_updated[:10]} UTC")
+        footer_text = "  •  ".join(footer_parts)
+
+        # Build all page embeds first so we can attach the summary to the last one
+        total_known = total_eco + total_war
+
+        def _bar(n: int, total_n: int, width: int = 20) -> str:
+            filled = round(n / total_n * width) if total_n > 0 else 0
+            return "█" * filled + "░" * (width - filled)
+
+        page_embeds: list[discord.Embed] = []
+        for page_idx, chunk in enumerate(chunks):
+            block = f"```\n{header}\n{sep}\n" + "\n".join(chunk) + "\n```"
+            embed = discord.Embed(
+                title=f"Skill distribution — {country_name}",
+                description=block,
+                colour=colour,
+            )
+            embed.set_footer(text=(
+                footer_text if page_idx == 0
+                else f"{total} citizens (cont.)"
+            ))
+            page_embeds.append(embed)
+
+        # Add overall totals as fields on the last page embed
+        last_embed = page_embeds[-1]
+        if total_known > 0:
+            eco_pct_total = total_eco / total_known * 100
+            war_pct_total = total_war / total_known * 100
+            last_embed.add_field(
+                name="🌾 Eco mode",
+                value=f"**{total_eco}** ({eco_pct_total:.1f}%)\n`{_bar(total_eco, total_known)}`",
+                inline=True,
+            )
+            last_embed.add_field(
+                name="⚔️ War mode",
+                value=f"**{total_war}** ({war_pct_total:.1f}%)\n`{_bar(total_war, total_known)}`",
+                inline=True,
+            )
+
+        for embed in page_embeds:
+            await ctx.send(embed=embed)
+
+    @commands.hybrid_command(name="skillcooldown", description="Show skill-reset cooldown stats per 5-level bucket for a country (or all).")
+    @app_commands.describe(country="Country code or name, or leave blank for all countries combined.")
+    async def skillcooldown(self, ctx: Context, country: str | None = None):
+        """Show average days since last skill reset per 5-level bucket.
+
+        A player can reset skills once every 7 days.  This command shows,
+        per level group, how long ago citizens last reset and how many can
+        already reset again.
+
+        Usage: ``/skillcooldown NL``  or  ``/skillcooldown`` (all countries)
+        """
+        if not self._db:
+            await ctx.send("Database not initialized.")
+            return
+        if hasattr(ctx, "defer"):
+            await ctx.defer()
+
+        country_name = "All countries"
+        cid: str | None = None
+
+        if country:
+            if not self._client:
+                await ctx.send("API client not initialized.")
+                return
+            country_list = await self._fetch_country_list(ctx)
+            if country_list is None:
+                return
+            target = find_country(country, country_list)
+            if target is None:
+                sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
+                await ctx.send(f"Country `{country}` not found. Sample codes: {sample}\u2026")
+                return
+            cid = cid_of(target)
+            country_name = target.get("name", country)
+
+        try:
+            buckets, last_updated = await self._db.get_skill_reset_cooldown_by_level_buckets(cid)
+        except Exception as exc:
+            await ctx.send(f"Database error: {exc}")
+            return
+
+        if not buckets:
+            await ctx.send(
+                f"No citizen skill-reset data cached for **{country_name}** yet.\n"
+                f"Run `/poll_citizens{' ' + country if country else ''}` to build the cache."
+            )
+            return
+
+        max_bucket = max(buckets)
+        total_with_data = sum(v["count"] for v in buckets.values())
+        total_available = sum(v["available"] for v in buckets.values())
+        total_no_data = sum(v["no_data"] for v in buckets.values())
+        total_citizens = total_with_data + total_no_data
+
+        COOLDOWN_DAYS = 7
+        BAR_W = 10  # bar represents 0–7 days available to reset (0 d = full, 7+ d = empty wait)
+
+        header = f"{'Levels':<9}  {'Citizens':>8}  {'Since reset':>11}  {'Can reset':>9}  Cooldown"
+        sep = "\u2500" * (9 + 2 + 8 + 2 + 11 + 2 + 9 + 2 + BAR_W)
+
+        data_rows: list[str] = []
+        for b in sorted(buckets):
+            bv = buckets[b]
+            total_b = bv["count"] + bv["no_data"]
+            avg_days = bv["avg_days_ago"]
+            avail = bv["available"]
+            avail_pct = avail / total_b * 100 if total_b else 0.0
+            b_end = min(b + 4, max_bucket + 4)
+            # bar shows avg cooldown remaining (days left until can reset)
+            # no data → show dashes so it's visually distinct
+            if bv["count"] == 0:
+                bar = "\u2500" * BAR_W
+            else:
+                avg_remaining = max(0.0, COOLDOWN_DAYS - avg_days)
+                filled = round(avg_remaining / COOLDOWN_DAYS * BAR_W)
+                bar = "\u2588" * filled + "\u2591" * (BAR_W - filled)
+            avg_str = f"{avg_days:.1f}d" if bv["count"] else "n/a"
+            data_rows.append(
+                f" {b:>3}\u2013{b_end:<3}  {total_b:>8}  {avg_str:>11}  {avail:>5} {avail_pct:>3.0f}%  {bar}"
+            )
+
+        colour = self._embed_colour()
+        EMBED_LIMIT = 3900
+        chunks: list[list[str]] = []
+        current: list[str] = []
+        for row in data_rows:
+            candidate = "\n".join(current + [row])
+            if len(f"```\n{header}\n{sep}\n{candidate}\n```") > EMBED_LIMIT and current:
+                chunks.append(current)
+                current = [row]
+            else:
+                current.append(row)
+        if current:
+            chunks.append(current)
+
+        footer_parts = [f"{total_citizens} citizens total"]
+        if last_updated:
+            footer_parts.append(f"Updated: {last_updated[:10]} UTC")
+        footer_text = "  \u2022  ".join(footer_parts)
+
+        page_embeds: list[discord.Embed] = []
+        for page_idx, chunk in enumerate(chunks):
+            block = f"```\n{header}\n{sep}\n" + "\n".join(chunk) + "\n```"
+            embed = discord.Embed(
+                title=f"Skill-reset cooldown \u2014 {country_name}",
+                description=block,
+                colour=colour,
+            )
+            embed.set_footer(text=(
+                footer_text if page_idx == 0
+                else f"{total_citizens} citizens (cont.)"
+            ))
+            page_embeds.append(embed)
+
+        # Overall summary on last embed
+        last_embed = page_embeds[-1]
+        if total_citizens > 0:
+            avail_pct_total = total_available / total_citizens * 100
+            if total_with_data > 0:
+                overall_avg = sum(v["avg_days_ago"] * v["count"] for v in buckets.values()) / total_with_data
+                last_embed.add_field(
+                    name="\u23f1\ufe0f Avg days since reset",
+                    value=f"**{overall_avg:.1f}** days",
+                    inline=True,
+                )
+            last_embed.add_field(
+                name="\u2705 Can reset now",
+                value=f"**{total_available}** ({avail_pct_total:.0f}%)",
+                inline=True,
+            )
+
+        for embed in page_embeds:
             await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="poll_citizens", description="Refresh citizen level cache.")

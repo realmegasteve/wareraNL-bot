@@ -112,6 +112,18 @@ class Database:
         await self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_citizen_levels_country ON citizen_levels(country_id)"
         )
+        # migration: add skill_mode column if missing
+        try:
+            await self._conn.execute("ALTER TABLE citizen_levels ADD COLUMN skill_mode TEXT")
+            await self._conn.commit()
+        except Exception:
+            pass  # column already exists
+        # migration: add last_skills_reset_at column if missing
+        try:
+            await self._conn.execute("ALTER TABLE citizen_levels ADD COLUMN last_skills_reset_at TEXT")
+            await self._conn.commit()
+        except Exception:
+            pass  # column already exists
         await self._conn.commit()
         logger.info("Database initialized at %s", self.path)
 
@@ -240,12 +252,12 @@ class Database:
         )
         await self._conn.commit()
 
-    async def upsert_citizen_level(self, user_id: str, country_id: str, level: int, updated_at: str) -> None:
+    async def upsert_citizen_level(self, user_id: str, country_id: str, level: int, updated_at: str, skill_mode: str | None = None, last_skills_reset_at: str | None = None) -> None:
         if not self._conn:
             raise RuntimeError("Database not initialized; call setup() first")
         await self._conn.execute(
-            "INSERT OR REPLACE INTO citizen_levels(user_id, country_id, level, updated_at) VALUES(?, ?, ?, ?)",
-            (user_id, country_id, level, updated_at),
+            "INSERT OR REPLACE INTO citizen_levels(user_id, country_id, level, skill_mode, last_skills_reset_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)",
+            (user_id, country_id, level, skill_mode, last_skills_reset_at, updated_at),
         )
 
     async def flush_citizen_levels(self) -> None:
@@ -261,15 +273,19 @@ class Database:
         await self._conn.execute("DELETE FROM citizen_levels WHERE country_id = ?", (country_id,))
         await self._conn.commit()
 
-    async def get_level_distribution(self, country_id: str) -> tuple[dict[int, int], str | None]:
-        """Return (level_counts, last_updated_at) for a country from cache."""
+    async def get_level_distribution(self, country_id: str | None) -> tuple[dict[int, int], str | None]:
+        """Return (level_counts, last_updated_at) for a country (or all countries when None) from cache."""
         if not self._conn:
             raise RuntimeError("Database not initialized; call setup() first")
         counts: dict[int, int] = {}
         last_updated: str | None = None
-        async with self._conn.execute(
-            "SELECT level, updated_at FROM citizen_levels WHERE country_id = ?", (country_id,)
-        ) as cur:
+        if country_id:
+            sql = "SELECT level, updated_at FROM citizen_levels WHERE country_id = ?"
+            params: tuple = (country_id,)
+        else:
+            sql = "SELECT level, updated_at FROM citizen_levels"
+            params = ()
+        async with self._conn.execute(sql, params) as cur:
             async for row in cur:
                 lvl, updated_at = row
                 if lvl is not None:
@@ -277,6 +293,122 @@ class Database:
                 if last_updated is None or updated_at > last_updated:
                     last_updated = updated_at
         return counts, last_updated
+
+    async def get_skill_mode_distribution(self, country_id: str | None) -> tuple[int, int, int, str | None]:
+        """Return (eco_count, war_count, unknown_count, last_updated) for a country or all countries."""
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        eco = war = unknown = 0
+        last_updated: str | None = None
+        if country_id:
+            sql = "SELECT skill_mode, updated_at FROM citizen_levels WHERE country_id = ?"
+            params: tuple = (country_id,)
+        else:
+            sql = "SELECT skill_mode, updated_at FROM citizen_levels"
+            params = ()
+        async with self._conn.execute(sql, params) as cur:
+            async for row in cur:
+                mode, upd = row
+                if mode == "eco":
+                    eco += 1
+                elif mode == "war":
+                    war += 1
+                else:
+                    unknown += 1
+                if last_updated is None or (upd and upd > last_updated):
+                    last_updated = upd
+        return eco, war, unknown, last_updated
+
+    async def get_skill_mode_by_level_buckets(
+        self, country_id: str | None
+    ) -> tuple[dict[int, dict[str, int]], str | None]:
+        """Return eco/war/unknown counts grouped by 5-level bucket and last_updated.
+
+        Returns a dict keyed by bucket_start (1, 6, 11, …) where each value is
+        {"eco": n, "war": n, "unknown": n}, plus the most-recent updated_at string.
+        """
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        if country_id:
+            sql = "SELECT level, skill_mode, updated_at FROM citizen_levels WHERE country_id = ?"
+            params: tuple = (country_id,)
+        else:
+            sql = "SELECT level, skill_mode, updated_at FROM citizen_levels"
+            params = ()
+        buckets: dict[int, dict[str, int]] = {}
+        last_updated: str | None = None
+        async with self._conn.execute(sql, params) as cur:
+            async for row in cur:
+                level, mode, upd = row
+                bucket = ((int(level or 1) - 1) // 5) * 5 + 1
+                if bucket not in buckets:
+                    buckets[bucket] = {"eco": 0, "war": 0, "unknown": 0}
+                if mode == "eco":
+                    buckets[bucket]["eco"] += 1
+                elif mode == "war":
+                    buckets[bucket]["war"] += 1
+                else:
+                    buckets[bucket]["unknown"] += 1
+                if last_updated is None or (upd and upd > last_updated):
+                    last_updated = upd
+        return buckets, last_updated
+
+
+    async def get_skill_reset_cooldown_by_level_buckets(
+        self, country_id: str | None
+    ) -> tuple[dict[int, dict], str | None]:
+        """Return skill-reset cooldown stats grouped by 5-level bucket.
+
+        For each bucket returns:
+          {"count": total_with_reset_data, "avg_days_ago": float,
+           "available": citizens_who_can_reset_now, "no_data": citizens_without_reset_ts}
+        plus the most-recent updated_at string.
+        """
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        if country_id:
+            sql = "SELECT level, last_skills_reset_at, updated_at FROM citizen_levels WHERE country_id = ?"
+            params: tuple = (country_id,)
+        else:
+            sql = "SELECT level, last_skills_reset_at, updated_at FROM citizen_levels"
+            params = ()
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        buckets: dict[int, dict] = {}
+        last_updated: str | None = None
+        async with self._conn.execute(sql, params) as cur:
+            async for row in cur:
+                level, reset_at, upd = row
+                bucket = ((int(level or 1) - 1) // 5) * 5 + 1
+                if bucket not in buckets:
+                    buckets[bucket] = {"count": 0, "sum_days": 0.0, "available": 0, "no_data": 0}
+                b = buckets[bucket]
+                if reset_at:
+                    try:
+                        ts = datetime.fromisoformat(reset_at.replace("Z", "+00:00"))
+                        days_ago = (now - ts).total_seconds() / 86400
+                        b["count"] += 1
+                        b["sum_days"] += days_ago
+                        if days_ago >= 7:
+                            b["available"] += 1
+                    except Exception:
+                        b["no_data"] += 1
+                        b["available"] += 1  # parse failed → assume can reset
+                else:
+                    b["no_data"] += 1
+                    b["available"] += 1  # never reset → can reset
+                if last_updated is None or (upd and upd > last_updated):
+                    last_updated = upd
+        # convert sum_days -> avg_days_ago
+        result: dict[int, dict] = {}
+        for bkt, b in buckets.items():
+            result[bkt] = {
+                "count": b["count"],
+                "avg_days_ago": b["sum_days"] / b["count"] if b["count"] else 0.0,
+                "available": b["available"],
+                "no_data": b["no_data"],
+            }
+        return result, last_updated
 
 
 __all__ = ["Database"]
