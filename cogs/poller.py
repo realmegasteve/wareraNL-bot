@@ -105,6 +105,17 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             )
         else:
             self.bot.logger.info("[production poll] done in %.1fs — no changes", elapsed)
+            if self.bot.testing:
+                channels = self.config.get("channels", {})
+                cid = channels.get("testing-area") or channels.get("production")
+                if cid:
+                    for guild in self.bot.guilds:
+                        ch = guild.get_channel(cid)
+                        if ch:
+                            try:
+                                await ch.send(f"✅ Production poll done ({elapsed:.1f}s) — no changes")
+                            except Exception:
+                                pass
 
     @hourly_production_check.before_loop
     async def before_hourly_production_check(self):
@@ -128,7 +139,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         """
         self.bot.logger.info("Starting production poll...")
         try:
-            market_channel_id = self.config.get("channels", {}).get("production")
+            channels = self.config.get("channels", {})
+            if self.bot.testing:
+                market_channel_id = channels.get("testing-area") or channels.get("production")
+            else:
+                market_channel_id = channels.get("production")
             if not market_channel_id:
                 self.bot.logger.warning("Market channel ID not configured")
                 return []
@@ -250,7 +265,8 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                         except Exception:
                             return 0.0
 
-                    top_dep = max(deposit_regions, key=_end_ts)
+                    # Pick region with highest total bonus; use longest deposit as tiebreaker
+                    top_dep = max(deposit_regions, key=lambda r: (r.get("bonus") or 0, _end_ts(r)))
                     dep_total = top_dep.get("bonus") or 0
                     dep_deposit_raw = top_dep.get("depositBonus") or 0
                     dep_ethic_dep_raw = top_dep.get("ethicDepositBonus") or 0
@@ -311,10 +327,9 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         except Exception:
             prev = None
 
-        changed = (
-            prev is None
-            or abs(float(prev.get("production_bonus") or 0) - float(bonus)) > 0.01
-        )
+        prev_bonus = float(prev.get("production_bonus") or 0) if prev else 0.0
+        # Only report when the best permanent bonus actually increases
+        changed = prev is None or (bonus > prev_bonus + 0.01)
 
         if changed and prev is not None:
             old_desc = f"{prev.get('country_name')} ({prev.get('production_bonus')}%)"
@@ -359,11 +374,10 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             except Exception:
                 return 0.0
 
-        prev_end_ts = _ts(prev.get("deposit_end_at") or "") if prev else 0.0
-        new_end_ts = _ts(deposit_end_at)
         is_new = prev is None
-        # Report a change when the region changed OR the deposit lasts longer than what we stored
-        changed = is_new or (prev.get("region_id") != region_id) or (new_end_ts > prev_end_ts + 60)
+        prev_bonus = int(prev.get("bonus") or 0) if prev else 0
+        # Only report when the best available bonus level actually changes
+        changed = is_new or (bonus != prev_bonus)
 
         if changed and not is_new:
             duration = self._format_duration(deposit_end_at)
@@ -522,6 +536,17 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                     await channel.send("Production poll completed: no leadership changes detected.")
                 except Exception:
                     self.bot.logger.exception("Failed to send poll completion message")
+                if self.bot.testing:
+                    channels = self.config.get("channels", {})
+                    cid = channels.get("testing-area") or channels.get("production")
+                    if cid:
+                        for guild in self.bot.guilds:
+                            ch = guild.get_channel(cid)
+                            if ch and ch != channel:
+                                try:
+                                    await ch.send("✅ Production poll done — no changes")
+                                except Exception:
+                                    pass
                 return
             try:
                 lines = []
