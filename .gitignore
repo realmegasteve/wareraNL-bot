@@ -3,6 +3,7 @@ _api_keys.json
 .env_test
 logs/
 pyrightconfig.json
+database/database.db.backup.*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
