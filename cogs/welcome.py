@@ -15,14 +15,6 @@ from discord.ext import commands, tasks
 import datetime
 import logging
 
-# Configuration is provided by the bot at runtime via `bot.config`.
-def _local_load_config() -> dict:
-    # kept for backwards compatibility in case a cog expects it
-    return {}
-
-def _local_save_config(config: dict) -> None:
-    # no-op: config should be managed centrally by the bot
-    return
 
 logger = logging.getLogger("discord_bot")
 
@@ -336,7 +328,7 @@ class Welcome(commands.Cog, name="welcome"):
         """
 
         # Skip if no welcome channel is configured
-        welcome_channel_id = self.bot.config.get("channels", {}).get("welcome_message")
+        welcome_channel_id = self.bot.config.get("channels", {}).get("welcome_buttons")
         if not welcome_channel_id:
             return
 
@@ -356,7 +348,7 @@ class Welcome(commands.Cog, name="welcome"):
             color=int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16),
         )
         # optionally send to a dedicated welcome/announcement channel if configured
-        extra_welcome = self.bot.config.get("channels", {}).get("welcome_buttons")
+        extra_welcome = self.bot.config.get("channels", {}).get("welcome_message")
         if extra_welcome:
             ch = member.guild.get_channel(extra_welcome)
             if ch:
