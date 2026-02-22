@@ -24,9 +24,9 @@ from discord.ext.commands import Context
 
 class FeedbackForm(discord.ui.Modal, title="Feedback"):
     feedback = discord.ui.TextInput(
-        label="What do you think about this bot?",
+        label="Wat vind je van deze bot?",
         style=discord.TextStyle.long,
-        placeholder="Type your answer here...",
+        placeholder="Typ je antwoord hier...",
         required=True,
         max_length=256,
     )
@@ -68,7 +68,7 @@ class General(commands.Cog, name="general"):
                 spoiler_attachment = attachment
                 break
         embed = discord.Embed(
-            title="Message without spoilers",
+            title="Bericht zonder spoilers",
             description=message.content.replace("||", ""),
             color=self.color,
         )
@@ -87,17 +87,17 @@ class General(commands.Cog, name="general"):
         :param user: The user that is being interacted with.
         """
         embed = discord.Embed(
-            description=f"The ID of {user.mention} is `{user.id}`.",
+            description=f"Het ID van {user.mention} is `{user.id}`.",
             color=self.color,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @commands.hybrid_command(
-        name="help", description="List all commands the bot has loaded."
+        name="help", description="Toon alle commands die de bot heeft geladen."
     )
     async def help(self, context: Context) -> None:
         embed = discord.Embed(
-            title="Help", description="List of available commands:", color=self.color
+            title="Help", description="Lijst van beschikbare commands:", color=self.color
         )
         for i in self.bot.cogs:
             if i == "owner" and not (await self.bot.is_owner(context.author)):
@@ -116,7 +116,7 @@ class General(commands.Cog, name="general"):
 
     @commands.hybrid_command(
         name="botinfo",
-        description="Get some useful (or not) information about the bot.",
+        description="Laat nuttige informatie over de bot zien.",
     )
     async def botinfo(self, context: Context) -> None:
         """
@@ -128,22 +128,22 @@ class General(commands.Cog, name="general"):
             description="Used [Krypton's](https://krypton.ninja) template",
             color=self.color,
         )
-        embed.set_author(name="Bot Information")
-        embed.add_field(name="Owner:", value="teunp", inline=True)
+        embed.set_author(name="Bot-informatie")
+        embed.add_field(name="Eigenaar:", value="teunp", inline=True)
         embed.add_field(
-            name="Python Version:", value=f"{platform.python_version()}", inline=True
+            name="Python-versie:", value=f"{platform.python_version()}", inline=True
         )
         embed.add_field(
             name="Prefix:",
-            value=f"/ (Slash Commands) or {self.bot.bot_prefix} for normal commands",
+            value=f"/ (Slash-commands) of {self.bot.bot_prefix} voor normale commands",
             inline=False,
         )
-        embed.set_footer(text=f"Requested by {context.author}")
+        embed.set_footer(text=f"Gevraagd door {context.author}")
         await context.send(embed=embed)
 
     @commands.hybrid_command(
         name="serverinfo",
-        description="Get some useful (or not) information about the server.",
+        description="Laat nuttige informatie over de server zien.",
     )
     async def serverinfo(self, context: Context) -> None:
         """
@@ -159,22 +159,22 @@ class General(commands.Cog, name="general"):
         roles = ", ".join(roles)
 
         embed = discord.Embed(
-            title="**Server Name:**", description=f"{context.guild}", color=self.color
+            title="**Servernaam:**", description=f"{context.guild}", color=self.color
         )
         if context.guild.icon is not None:
             embed.set_thumbnail(url=context.guild.icon.url)
-        embed.add_field(name="Server ID", value=context.guild.id)
-        embed.add_field(name="Member Count", value=context.guild.member_count)
+        embed.add_field(name="Server-ID", value=context.guild.id)
+        embed.add_field(name="Ledenaantal", value=context.guild.member_count)
         embed.add_field(
-            name="Text/Voice Channels", value=f"{len(context.guild.channels)}"
+            name="Tekst/Spraakkanalen", value=f"{len(context.guild.channels)}"
         )
-        embed.add_field(name=f"Roles ({len(context.guild.roles)})", value=roles)
-        embed.set_footer(text=f"Created at: {context.guild.created_at}")
+        embed.add_field(name=f"Rollen ({len(context.guild.roles)})", value=roles)
+        embed.set_footer(text=f"Aangemaakt op: {context.guild.created_at}")
         await context.send(embed=embed)
 
     @commands.hybrid_command(
         name="ping",
-        description="Check if the bot is alive.",
+        description="Controleer of de bot online is.",
     )
     async def ping(self, context: Context) -> None:
         """
@@ -184,14 +184,14 @@ class General(commands.Cog, name="general"):
         """
         embed = discord.Embed(
             title="🏓 Pong!",
-            description=f"The bot latency is {round(self.bot.latency * 1000)}ms.",
+            description=f"De botvertraging is {round(self.bot.latency * 1000)}ms.",
             color=0xBEBEFE,
         )
         await context.send(embed=embed)
 
     @commands.hybrid_command(
         name="invite",
-        description="Get the invite link of the bot to be able to invite it.",
+        description="Krijg de uitnodigingslink van de bot.",
     )
     async def invite(self, context: Context) -> None:
         """
@@ -200,12 +200,12 @@ class General(commands.Cog, name="general"):
         :param context: The hybrid command context.
         """
         embed = discord.Embed(
-            description=f"Invite me by clicking [here]({self.bot.invite_link}).",
+            description=f"Nodig me uit door [hier]({self.bot.invite_link}) te klikken.",
             color=self.color,
         )
         try:
             await context.author.send(embed=embed)
-            await context.send("I sent you a private message!")
+            await context.send("Ik heb je een privébericht gestuurd!")
         except discord.Forbidden:
             await context.send(embed=embed)
 
@@ -231,9 +231,9 @@ class General(commands.Cog, name="general"):
 
     @commands.hybrid_command(
         name="8ball",
-        description="Ask any question to the bot.",
+        description="Stel de bot een willekeurige vraag.",
     )
-    @app_commands.describe(question="The question you want to ask.")
+    @app_commands.describe(question="De vraag die je wilt stellen.")
     async def eight_ball(self, context: Context, *, question: str) -> None:
         """
         Ask any question to the bot.
@@ -242,33 +242,33 @@ class General(commands.Cog, name="general"):
         :param question: The question that should be asked by the user.
         """
         answers = [
-            "It is certain.",
-            "It is decidedly so.",
-            "You may rely on it.",
-            "Without a doubt.",
-            "Yes - definitely.",
-            "As I see, yes.",
-            "Most likely.",
-            "Outlook good.",
-            "Yes.",
-            "Signs point to yes.",
-            "Reply hazy, try again.",
-            "Ask again later.",
-            "Better not tell you now.",
-            "Cannot predict now.",
-            "Concentrate and ask again later.",
-            "Don't count on it.",
-            "My reply is no.",
-            "My sources say no.",
-            "Outlook not so good.",
-            "Very doubtful.",
+            "Het is zeker.",
+            "Absoluut.",
+            "Je kunt erop rekenen.",
+            "Zonder twijfel.",
+            "Ja, zeker weten.",
+            "Zoals ik het zie, ja.",
+            "Hoogstwaarschijnlijk.",
+            "Ziet er goed uit.",
+            "Ja.",
+            "Alle tekenen wijzen op ja.",
+            "Antwoord vaag, probeer later opnieuw.",
+            "Vraag het later nog eens.",
+            "Beter om het nu niet te zeggen.",
+            "Kan het nu niet voorspellen.",
+            "Concentreer je en stel de vraag opnieuw.",
+            "Reken er maar niet op.",
+            "Mijn antwoord is nee.",
+            "Mijn bronnen zeggen nee.",
+            "Vooruitzichten niet zo goed.",
+            "Zeer twijfelachtig.",
         ]
         embed = discord.Embed(
-            title="**My Answer:**",
+            title="**Mijn Antwoord:**",
             description=f"{random.choice(answers)}",
             color=self.color,
         )
-        embed.set_footer(text=f"The question was: {question}")
+        embed.set_footer(text=f"De vraag was: {question}")
         await context.send(embed=embed)
 
     # @commands.hybrid_command(
@@ -302,7 +302,7 @@ class General(commands.Cog, name="general"):
     #             await context.send(embed=embed)
 
     @app_commands.command(
-        name="feedback", description="Submit a feedback for the owners of the bot"
+        name="feedback", description="Dien feedback in voor de eigenaars van de bot."
     )
     async def feedback(self, interaction: discord.Interaction) -> None:
         """
@@ -317,7 +317,7 @@ class General(commands.Cog, name="general"):
         interaction = feedback_form.interaction
         await interaction.response.send_message(
             embed=discord.Embed(
-                description="Thank you for your feedback, the owners have been notified about it.",
+                description="Bedankt voor je feedback, de eigenaren zijn op de hoogte gesteld.",
                 color=self.color,
             )
         )
@@ -325,8 +325,8 @@ class General(commands.Cog, name="general"):
         app_owner = (await self.bot.application_info()).owner
         await app_owner.send(
             embed=discord.Embed(
-                title="New Feedback",
-                description=f"{interaction.user} (<@{interaction.user.id}>) has submitted a new feedback:\n```\n{feedback_form.answer}\n```",
+                title="Nieuwe Feedback",
+                description=f"{interaction.user} (<@{interaction.user.id}>) heeft nieuwe feedback ingediend:\n```\n{feedback_form.answer}\n```",
                 color=self.color,
             )
         )

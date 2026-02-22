@@ -113,7 +113,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                         ch = guild.get_channel(cid)
                         if ch:
                             try:
-                                await ch.send(f"✅ Production poll done ({elapsed:.1f}s) — no changes")
+                                await ch.send(f"✅ Productiepeiling klaar ({elapsed:.1f}s) — geen wijzigingen")
                             except Exception:
                                 pass
 
@@ -453,12 +453,12 @@ class ProductionChecker(commands.Cog, name="production_checker"):
     # Daily citizen level cache                                            #
     # ------------------------------------------------------------------ #
 
-    @tasks.loop(hours=24)
+    @tasks.loop(hours=1)
     async def daily_citizen_refresh(self):
-        """Refresh citizen level cache for every country once per day.
+        """Refresh citizen level cache for every country once per hour.
 
         Uses poll_state to persist the last-run timestamp so restarts don't
-        trigger a duplicate refresh within the same 24-hour window.
+        trigger a duplicate refresh within the same 1-hour window.
         """
         if not self._client or not self._db or not self._citizen_cache:
             return
@@ -472,9 +472,9 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             if last_run_str:
                 last_run = datetime.fromisoformat(last_run_str)
                 elapsed_h = (now_utc - last_run).total_seconds() / 3600
-                if elapsed_h < 24:
+                if elapsed_h < 1:
                     self.bot.logger.info(
-                        "daily_citizen_refresh: skipping — last run %.1fh ago (< 24h)", elapsed_h
+                        "daily_citizen_refresh: skipping — last run %.1fh ago (< 1h)", elapsed_h
                     )
                     return
         except Exception:
@@ -507,6 +507,21 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             await asyncio.sleep(2)
         self.bot.logger.info("daily_citizen_refresh: complete (%d countries)", total)
 
+        if self.bot.testing:
+            channels = self.config.get("channels", {})
+            cid = channels.get("testing-area") or channels.get("production")
+            if cid:
+                for guild in self.bot.guilds:
+                    ch = guild.get_channel(cid)
+                    if ch:
+                        try:
+                            await ch.send(
+                                f"✅ Burgersniveau-verversing klaar — {total} landen verwerkt"
+                            )
+                        except Exception:
+                            pass
+                        break
+
     @daily_citizen_refresh.before_loop
     async def before_daily_citizen_refresh(self):
         await self.bot.wait_until_ready()
@@ -515,25 +530,25 @@ class ProductionChecker(commands.Cog, name="production_checker"):
     # Commands — production                                                #
     # ------------------------------------------------------------------ #
 
-    @commands.command(name="poll_now")
+    @commands.command(name="peil_nu")
     @commands.is_owner()
     async def poll_now(self, ctx: Context):
         """Trigger a single production poll immediately."""
         if not self._client:
-            await ctx.send("API client not initialized.")
+            await ctx.send("API-client is niet geïnitialiseerd.")
             return
         if self._poll_lock.locked():
-            await ctx.send("A production poll is already running.")
+            await ctx.send("Er loopt al een productiepeiling.")
             return
         channel = ctx.channel
-        await channel.send("Starting production poll...")
+        await channel.send("Productiepeiling gestart...")
 
         async def _run_and_report():
             async with self._poll_lock:
                 changes = await self._run_poll_once()
             if not changes:
                 try:
-                    await channel.send("Production poll completed: no leadership changes detected.")
+                    await channel.send("Productiepeiling voltooid: geen wijzigingen gedetecteerd.")
                 except Exception:
                     self.bot.logger.exception("Failed to send poll completion message")
                 if self.bot.testing:
@@ -544,7 +559,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                             ch = guild.get_channel(cid)
                             if ch and ch != channel:
                                 try:
-                                    await ch.send("✅ Production poll done — no changes")
+                                    await ch.send("✅ Productiepeiling klaar — geen wijzigingen")
                                 except Exception:
                                     pass
                 return
@@ -562,13 +577,13 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                         lines.append(
                             f"🏭 Specialization **{base}** new leader: **{new}** ← was {prev}"
                         )
-                await channel.send(f"Production poll — {len(changes)} change(s):\n" + "\n".join(lines))
+                await channel.send(f"Productiepeiling voltooid — {len(changes)} wijziging(en):\n" + "\n".join(lines))
             except Exception:
                 self.bot.logger.exception("Failed to send poll report")
 
         asyncio.create_task(_run_and_report())
 
-    @commands.command(name="fake_leader")
+    @commands.command(name="nep_leider")
     @commands.is_owner()
     async def fake_leader(self, ctx: Context):
         """Set all stored production bonuses to 0 so the next !poll_now reports changes.
@@ -577,7 +592,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         actual bonus is > 0 will appear as a leadership change.
         """
         if not self._db:
-            await ctx.send("Database not initialized.")
+            await ctx.send("Database niet geïnitialiseerd.")
             return
         try:
             await self._db._conn.execute("UPDATE specialization_top SET production_bonus = 0")
@@ -587,15 +602,15 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             count = (await rows.fetchone())[0]
             if count == 0:
                 await ctx.send(
-                    "Tables are empty — run `!poll_now` first to populate them, then `!fake_leader`, then `!poll_now` again."
+                    "Tabellen zijn leeg — run eerst `!peil_nu` om ze te vullen, dan `!nep_leider`, dan `!peil_nu` opnieuw."
                 )
             else:
                 await ctx.send(
-                    f"All stored bonuses zeroed ({count} items). Run `!poll_now` — every item with a real bonus will show as a new leader."
+                    f"Alle opgeslagen bonussen op nul gezet ({count} items). Run `!peil_nu` — elk item met een echte bonus wordt als nieuwe leider getoond."
                 )
         except Exception:
             self.bot.logger.exception("fake_leader: failed to update DB")
-            await ctx.send("DB update failed; see logs.")
+            await ctx.send("DB-update mislukt; zie logs.")
 
     # ------------------------------------------------------------------ #
     # Helper — primary colour for embeds                                   #
@@ -612,11 +627,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
     # /bonus                                                               #
     # ------------------------------------------------------------------ #
 
-    @commands.hybrid_command(name="bonus", description="Show production leaders for every item.")
+    @commands.hybrid_command(name="bonus", description="Toon productieleiders voor elk item.")
     async def bonus(self, ctx: Context):
         """Display the current production leaders for each specialization."""
         if not self._db:
-            await ctx.send("Database not initialized.")
+            await ctx.send("Database niet geïnitialiseerd.")
             return
         if hasattr(ctx, 'defer'):
             await ctx.defer()
@@ -624,7 +639,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             tops = await self._db.get_all_tops()
         except Exception:
             self.bot.logger.exception("Failed to fetch production leaders")
-            await ctx.send("Failed to fetch production leaders; see logs.")
+            await ctx.send("Ophalen van productieleiders mislukt; zie logs.")
             return
 
         deposit_tops: list[dict] = []
@@ -634,7 +649,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             pass
 
         if not tops and not deposit_tops:
-            await ctx.send("No production leaders recorded.")
+            await ctx.send("Geen productieleiders opgeslagen.")
             return
 
         dep_by_item = {d.get("item"): d for d in deposit_tops}
@@ -662,15 +677,15 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             wb = max(max(len(self._pct(t.get("production_bonus"))) for _, t in long_rows), 5)
             bds_l = [self._long_bd(t) for _, t in long_rows]
             wbd = max(max(len(bd) for bd in bds_l), 9)
-            hdr_l = f"  {'Item':<{wi}}  {'Country':<{wc}}  {'Bonus':>{wb}}  {'Breakdown':<{wbd}}"
+            hdr_l = f"  {'Item':<{wi}}  {'Land':<{wc}}  {'Bonus':>{wb}}  {'Specificatie':<{wbd}}"
             sep_l = "  " + "-" * (len(hdr_l) - 2)
             rows_l = [
-                f"{'>' if i == best_l_idx else ' '} {item:<{wi}}  {(t.get('country_name') or 'Unknown'):<{wc}}  {self._pct(t.get('production_bonus')):>{wb}}  {bd:<{wbd}}"
+                f"{'>' if i == best_l_idx else ' '} {item:<{wi}}  {(t.get('country_name') or 'Onbekend'):<{wc}}  {self._pct(t.get('production_bonus')):>{wb}}  {bd:<{wbd}}"
                 for i, ((item, t), bd) in enumerate(zip(long_rows, bds_l))
             ]
             table_l = "\n".join([hdr_l, sep_l] + rows_l)
         else:
-            table_l = "(none)"
+            table_l = "(geen)"
 
         if short_rows:
             wi2 = max(max(len(item) for item, _ in short_rows), 4)
@@ -680,7 +695,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             durs = [self._format_duration(d.get("deposit_end_at") or "") or "" for _, d in short_rows]
             wbd2 = max(max(len(bd) for bd in bds_s), 9)
             wdur = max(max(len(dur) for dur in durs), 7)
-            hdr_s = f"  {'Item':<{wi2}}  {'Region':<{wr}}  {'Bonus':>{wb2}}  {'Breakdown':<{wbd2}}  {'Expires':<{wdur}}"
+            hdr_s = f"  {'Item':<{wi2}}  {'Regio':<{wr}}  {'Bonus':>{wb2}}  {'Specificatie':<{wbd2}}  {'Verloopt':<{wdur}}"
             sep_s = "  " + "-" * (len(hdr_s) - 2)
             rows_s = [
                 f"{'>' if i == best_s_idx else ' '} {item:<{wi2}}  {(d.get('region_name') or d.get('region_id') or '?'):<{wr}}  {self._pct(d.get('bonus')):>{wb2}}  {bd:<{wbd2}}  {dur:<{wdur}}"
@@ -688,7 +703,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             ]
             table_s = "\n".join([hdr_s, sep_s] + rows_s)
         else:
-            table_s = "(none)"
+            table_s = "(geen)"
 
         MSG_LIMIT = 1900  # plain message limit with safe margin
 
@@ -709,19 +724,19 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             if chunk:
                 chunks.append(chunk)
             for idx, ch in enumerate(chunks):
-                chunk_title = title if idx == 0 else f"{title} (cont.)"
+                chunk_title = title if idx == 0 else f"{title} (vervolg)"
                 block = f"**{chunk_title}**\n```\n" + "\n".join(header_lines + ch) + "\n```"
                 await ctx.send(block)
 
-        await _send_table("📈 Long-term leaders", table_l)
-        await _send_table("⚡ Short-term leaders", table_s)
+        await _send_table("📈 Langetermijnleiders", table_l)
+        await _send_table("⚡ Kortetermijnleiders", table_s)
 
         # Best-of summary as a compact embed
         best_embed = discord.Embed(colour=colour)
         if best_l_idx is not None:
             bl_item, bl = long_rows[best_l_idx]
             best_embed.add_field(
-                name="🏆 Best long-term",
+                name="🏆 Beste langetermijn",
                 value=f"**{bl_item}** — {bl.get('country_name')} **{bl.get('production_bonus')}%**",
                 inline=False,
             )
@@ -730,7 +745,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             rl = bs.get("region_name") or bs.get("region_id") or "?"
             dur = self._format_duration(bs.get("deposit_end_at") or "")
             best_embed.add_field(
-                name="⚡ Best short-term",
+                name="⚡ Beste kortetermijn",
                 value=(
                     f"**{bs_item}** — {rl} **{bs.get('bonus')}%**"
                     + (f"  ⏳ {dur}" if dur else "")
@@ -744,11 +759,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
     # /topbonus                                                            #
     # ------------------------------------------------------------------ #
 
-    @commands.hybrid_command(name="topbonus", description="Show the single best long-term and short-term bonus.")
+    @commands.hybrid_command(name="topbonus", description="Toon de beste langetermijn- en kortetermijnbonus.")
     async def topbonus(self, ctx: Context):
         """Show the single best long-term and best short-term production bonus."""
         if not self._db:
-            await ctx.send("Database not initialized.")
+            await ctx.send("Database niet geïnitialiseerd.")
             return
         if hasattr(ctx, 'defer'):
             await ctx.defer()
@@ -759,21 +774,21 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             deposit_tops = await self._db.get_all_deposit_tops()
         except Exception:
             self.bot.logger.exception("Failed to fetch production data")
-            await ctx.send("Failed to fetch production data; see logs.")
+            await ctx.send("Ophalen van productiedata mislukt; zie logs.")
             return
 
         if not tops and not deposit_tops:
-            await ctx.send("No production data recorded yet.")
+            await ctx.send("Nog geen productiedata opgeslagen.")
             return
 
         colour = self._embed_colour()
-        embed = discord.Embed(title="Top Production Bonuses", colour=colour)
+        embed = discord.Embed(title="Beste Productiebonussen", colour=colour)
 
         if tops:
             bl = max(tops, key=lambda t: float(t.get("production_bonus") or 0))
             bd = self._long_bd(bl)
             embed.add_field(
-                name="🏆 Best long-term",
+                name="🏆 Beste langetermijn",
                 value=(
                     f"**{bl.get('item')}** — {bl.get('country_name')} **{bl.get('production_bonus')}%**"
                     + (f"\n*{bd}*" if bd else "")
@@ -786,7 +801,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             dur = self._format_duration(bs.get("deposit_end_at") or "")
             bd = self._short_bd(bs)
             embed.add_field(
-                name="⚡ Best short-term",
+                name="⚡ Beste kortetermijn",
                 value=(
                     f"**{bs.get('item')}** — {rl} **{bs.get('bonus')}%**"
                     + (f"  ⏳ {dur}" if dur else "")
@@ -796,7 +811,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             )
         await ctx.send(embed=embed)
 
-    @commands.command(name="clear_production")
+    @commands.command(name="reset_productie")
     @commands.is_owner()
     async def clear_production(self, ctx: Context):
         """Wipe all rows from specialization_top and deposit_top.
@@ -804,29 +819,29 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         The next poll will repopulate them from scratch.
         """
         if not self._db:
-            await ctx.send("Database not initialized.")
+            await ctx.send("Database niet geïnitialiseerd.")
             return
         try:
             await self._db._conn.execute("DELETE FROM specialization_top")
             await self._db._conn.execute("DELETE FROM deposit_top")
             await self._db._conn.commit()
-            await ctx.send("✅ Cleared `specialization_top` and `deposit_top`. Run `!poll_now` to repopulate.")
+            await ctx.send("✅ Tabellen `specialization_top` en `deposit_top` gewist. Run `!peil_nu` om ze opnieuw te vullen.")
         except Exception:
             self.bot.logger.exception("Failed to clear production tables")
-            await ctx.send("Failed to clear tables; see logs.")
+            await ctx.send("Wissen van tabellen mislukt; zie logs.")
 
-    @commands.hybrid_command(name="movecost", description="Show break-even hours to recover company relocation cost.")
+    @commands.hybrid_command(name="verhuiskosten", description="Toon het break-evenpunt om verhuiskosten van een bedrijf terug te verdienen.")
     @app_commands.describe(
-        bonuses='Optional: current bonus, or "current new" (e.g. "30" or "30 55"). Leave blank for full table.',
+        bonuses='Optioneel: huidige bonus, of "huidig nieuw" (bijv. "30" of "30 55"). Leeg laten voor volledige tabel.',
     )
-    async def movecost(self, ctx: Context, bonuses: str = ""):
+    async def verhuiskosten(self, ctx: Context, bonuses: str = ""):
         """Break-even table: hours of Automated Engine production to recover the 5-concrete move cost.
 
         Only the bonus *gain* counts — your engine's base output runs regardless of location.
         Rows = new production bonus (5 %–80 %), columns = automated engine level (1–7).
         Rows at or below your current bonus are shown as ∞ (moving gives no gain there).
         Colour: green ≤ 72 h, yellow 73–120 h, red > 120 h / ∞.
-        Usage: ``/movecost``  ``/movecost 30``  ``/movecost 30 55``
+        Usage: ``/verhuiskosten``  ``/verhuiskosten 30``  ``/verhuiskosten 30 55``
         """
         # Parse the combined bonuses argument
         parts = bonuses.split()
@@ -838,10 +853,10 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             if len(parts) >= 2:
                 new_bonus = int(parts[1])
         except ValueError:
-            await ctx.send("Invalid input. Use `/movecost`, `/movecost 30`, or `/movecost 30 55`.")
+            await ctx.send("Ongeldige invoer. Gebruik `/verhuiskosten`, `/verhuiskosten 30`, of `/verhuiskosten 30 55`.")
             return
         if not self._client:
-            await ctx.send("API client not initialized.")
+            await ctx.send("API-client is niet geïnitialiseerd.")
             return
         if hasattr(ctx, "defer"):
             await ctx.defer()
@@ -849,24 +864,24 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         try:
             prices_resp = await self._client.get("/itemTrading.getPrices")
         except Exception as exc:
-            await ctx.send(f"Failed to fetch market prices: {exc}")
+            await ctx.send(f"Ophalen van marktprijzen mislukt: {exc}")
             return
 
         prices = self._unwrap_prices(prices_resp)
         if not prices:
-            await ctx.send("Could not parse market prices from API response.")
+            await ctx.send("Kon marktprijzen niet verwerken vanuit API-antwoord.")
             return
 
         concrete_price = float(prices.get("concrete") or prices.get("Concrete") or 0)
         if concrete_price <= 0:
-            await ctx.send("Concrete price not found or is zero in market data.")
+            await ctx.send("Betonprijs niet gevonden of nul in marktdata.")
             return
         move_cost = 5.0 * concrete_price
 
         pp_items = ["grain", "lead", "iron", "limestone"]
         pp_prices = [float(prices[k]) for k in pp_items if prices.get(k) and float(prices[k]) > 0]
         if not pp_prices:
-            await ctx.send("Could not retrieve enough item prices for PP value calculation.")
+            await ctx.send("Kon niet genoeg artikelprijzen ophalen voor PP-waardeberekening.")
             return
         avg_pp_value = sum(pp_prices) / len(pp_prices)
 
@@ -895,14 +910,14 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         if new_bonus is not None:
             bonus_gain = new_bonus - bonus
             assumption = (
-                f"Moving from **{bonus}%** → **{new_bonus}%** (gain: **+{bonus_gain}%**)"
+                f"Verhuizing van **{bonus}%** → **{new_bonus}%** (winst: **+{bonus_gain}%**)"
             )
             if bonus_gain <= 0:
                 embed = discord.Embed(
-                    title="Break-even time — company relocation",
+                    title="Break-evenpunt — bedrijfsverhuizing",
                     description=(
                         f"{assumption}\n\n"
-                        f"The new bonus is not higher than your current bonus — move gives no gain."
+                        f"De nieuwe bonus is niet hoger dan je huidige bonus — verhuizing levert geen winst op."
                     ),
                     colour=colour,
                 )
@@ -911,15 +926,15 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 for lv in levels:
                     extra_per_hour = lv * (bonus_gain / 100) * avg_pp_value
                     h = move_cost / extra_per_hour
-                    level_lines.append(f"Level {lv}: **{_fmt_h(h)}**")
+                    level_lines.append(f"Niveau {lv}: **{_fmt_h(h)}**")
                 embed = discord.Embed(
-                    title="Break-even time — company relocation",
+                    title="Break-evenpunt — bedrijfsverhuizing",
                     description=(
-                        f"Automated Engine production time to recover the move cost.\n"
+                        f"Automated Engine productietijd om de verhuiskosten terug te verdienen.\n"
                         f"{assumption}\n\n"
                         + "\n".join(level_lines)
-                        + f"\n\n**Move cost:** 5 × {concrete_price:.2f} = **{move_cost:.2f} coins**\n"
-                        f"**PP value avg:** {avg_pp_value:.4f} coins/pp"
+                        + f"\n\n**Verhuiskosten:** 5 × {concrete_price:.2f} = **{move_cost:.2f} coins**\n"
+                        f"**Gemiddelde PP-waarde:** {avg_pp_value:.4f} coins/pp"
                     ),
                     colour=colour,
                 )
@@ -963,22 +978,22 @@ class ProductionChecker(commands.Cog, name="production_checker"):
 
         if bonus > 0:
             assumption = (
-                f"Assumes your current production bonus is **{bonus}%**.\n"
-                f"Add a second number to get break-even for a specific target, e.g. `/movecost {bonus} 55`."
+                f"Je huidige productiebonus is **{bonus}%**.\n"
+                f"Voeg een tweede getal toe voor een specifiek doel, bijv. `/verhuiskosten {bonus} 55`."
             )
         else:
             assumption = (
-                "Assumes your company currently has **no production bonus**.\n"
-                "You can supply your current bonus as a first number (e.g. `/movecost 30`), "
-                "and optionally a target bonus as a second number (e.g. `/movecost 30 55`)."
+                "Je bedrijf heeft momenteel **geen productiebonus**.\n"
+                "Je kunt je huidige bonus als eerste getal opgeven (bijv. `/verhuiskosten 30`), "
+                "en optioneel een doelbonus als tweede getal (bijv. `/verhuiskosten 30 55`)."
             )
         embed = discord.Embed(
-            title="Break-even time — company relocation",
+            title="Break-evenpunt — bedrijfsverhuizing",
             description=(
-                f"Automated Engine production time to recover the move cost.\n"
+                f"Automated Engine productietijd om de verhuiskosten terug te verdienen.\n"
                 f"{assumption}\n\n"
-                f"**Move cost:** 5 × {concrete_price:.2f} = **{move_cost:.2f} coins**\n"
-                f"**PP value avg:** {avg_pp_value:.4f} coins/pp"
+                f"**Verhuiskosten:** 5 × {concrete_price:.2f} = **{move_cost:.2f} coins**\n"
+                f"**Gemiddelde PP-waarde:** {avg_pp_value:.4f} coins/pp"
             ),
             colour=colour,
         )
@@ -1045,17 +1060,17 @@ class ProductionChecker(commands.Cog, name="production_checker"):
     # Commands — citizen levels                                            #
     # ------------------------------------------------------------------ #
 
-    @commands.hybrid_command(name="leveldist", description="Show citizen level distribution for a country (or all).")
+    @commands.hybrid_command(name="niveauverdeling", description="Toon de niveauverdeling van burgers voor een land (of alle).")
     @app_commands.describe(
-        country="Country code or name (e.g. NL or Netherlands), or leave blank for all countries.",
-        all_levels="Show individual levels instead of buckets of 5",
+        country="Landcode of naam (bijv. NL of Netherlands), of leeg laten voor alle landen.",
+        all_levels="Toon individuele niveaus in plaats van groepen van 5",
     )
     async def leveldist(self, ctx: Context, country: str | None = None, all_levels: bool = False):
         """Show the cached level distribution for a country, or all countries if no argument given.
 
         Accepts a country code or name.
-        Usage: ``/leveldist NL``  ``/leveldist Netherlands all_levels:True``  ``/leveldist`` (all)
-        Prefix shorthand: ``!leveldist NL all``  (trailing 'all' enables all_levels)
+        Usage: ``/niveauverdeling NL``  ``/niveauverdeling Netherlands all_levels:True``  ``/niveauverdeling`` (all)
+        Prefix shorthand: ``!niveauverdeling NL all``  (trailing 'all' enables all_levels)
         """
         # Prefix mode may pass all_levels inside the country string; strip it here.
         if country and country.lower().endswith(" all"):
@@ -1063,18 +1078,18 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             all_levels = True
 
         if not self._db:
-            await ctx.send("Services not initialized.")
+            await ctx.send("Diensten niet geïnitialiseerd.")
             return
 
         if hasattr(ctx, 'defer'):
             await ctx.defer()
 
-        country_name = "All countries"
+        country_name = "Alle landen"
         cid: str | None = None
 
         if country:
             if not self._client:
-                await ctx.send("API client not initialized.")
+                await ctx.send("API-client is niet geïnitialiseerd.")
                 return
             country_list = await self._fetch_country_list(ctx)
             if country_list is None:
@@ -1082,7 +1097,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             target = find_country(country, country_list)
             if target is None:
                 sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
-                await ctx.send(f"Country `{country}` not found. Sample codes: {sample}…")
+                await ctx.send(f"Land `{country}` niet gevonden. Voorbeeldcodes: {sample}…")
                 return
             cid = cid_of(target)
             country_name = target.get("name", country)
@@ -1090,13 +1105,13 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         try:
             level_counts, last_updated = await self._db.get_level_distribution(cid)
         except Exception as exc:
-            await ctx.send(f"Database error: {exc}")
+            await ctx.send(f"Databasefout: {exc}")
             return
 
         if not level_counts:
             await ctx.send(
-                f"No cached level data for **{country_name}** yet.\n"
-                f"Run `/poll_citizens{' ' + country if country else ''}` to build the cache."
+                f"Nog geen gecachte niveaudata voor **{country_name}**.\n"
+                f"Run `/peil_burgers{' ' + country if country else ''}` om de cache op te bouwen."
             )
             return
 
@@ -1164,8 +1179,8 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             ))
             await ctx.send(embed=embed)
 
-    @commands.hybrid_command(name="skilldist", description="Show eco vs war skill distribution for a country (or all).")
-    @app_commands.describe(country="Country code or name, or leave blank for all countries combined.")
+    @commands.hybrid_command(name="skilldist", description="Toon de eco vs. oorlog vaardighedenverdeling voor een land (of alle).")
+    @app_commands.describe(country="Landcode of naam, of leeg laten voor alle landen samen.")
     async def skilldist(self, ctx: Context, country: str | None = None):
         """Show eco vs war distribution per 5-level bucket, followed by the overall totals.
 
@@ -1177,17 +1192,17 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         Usage: ``/skills NL``  or  ``/skills`` (all countries)
         """
         if not self._db:
-            await ctx.send("Database not initialized.")
+            await ctx.send("Database niet geïnitialiseerd.")
             return
         if hasattr(ctx, "defer"):
             await ctx.defer()
 
-        country_name = "All countries"
+        country_name = "Alle landen"
         cid: str | None = None
 
         if country:
             if not self._client:
-                await ctx.send("API client not initialized.")
+                await ctx.send("API-client is niet geïnitialiseerd.")
                 return
             country_list = await self._fetch_country_list(ctx)
             if country_list is None:
@@ -1195,7 +1210,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             target = find_country(country, country_list)
             if target is None:
                 sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
-                await ctx.send(f"Country `{country}` not found. Sample codes: {sample}…")
+                await ctx.send(f"Land `{country}` niet gevonden. Voorbeeldcodes: {sample}…")
                 return
             cid = cid_of(target)
             country_name = target.get("name", country)
@@ -1203,13 +1218,13 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         try:
             buckets, last_updated = await self._db.get_skill_mode_by_level_buckets(cid)
         except Exception as exc:
-            await ctx.send(f"Database error: {exc}")
+            await ctx.send(f"Databasefout: {exc}")
             return
 
         if not buckets:
             msg = (
-                f"No citizen skill data cached for **{country_name}** yet.\n"
-                f"Run `/poll_citizens{' ' + country if country else ''}` to build the cache."
+                f"Nog geen gecachte vaardigheidsdata voor **{country_name}**.\n"
+                f"Run `/peil_burgers{' ' + country if country else ''}` om de cache op te bouwen."
             )
             await ctx.send(msg)
             return
@@ -1300,8 +1315,8 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         for embed in page_embeds:
             await ctx.send(embed=embed)
 
-    @commands.hybrid_command(name="skillcooldown", description="Show skill-reset cooldown stats per 5-level bucket for a country (or all).")
-    @app_commands.describe(country="Country code or name, or leave blank for all countries combined.")
+    @commands.hybrid_command(name="skillcooldown", description="Toon cooldownstatistieken per 5-niveaugroep voor een land (of alle).")
+    @app_commands.describe(country="Landcode of naam, of leeg laten voor alle landen samen.")
     async def skillcooldown(self, ctx: Context, country: str | None = None):
         """Show average days since last skill reset per 5-level bucket.
 
@@ -1312,17 +1327,17 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         Usage: ``/skillcooldown NL``  or  ``/skillcooldown`` (all countries)
         """
         if not self._db:
-            await ctx.send("Database not initialized.")
+            await ctx.send("Database niet geïnitialiseerd.")
             return
         if hasattr(ctx, "defer"):
             await ctx.defer()
 
-        country_name = "All countries"
+        country_name = "Alle landen"
         cid: str | None = None
 
         if country:
             if not self._client:
-                await ctx.send("API client not initialized.")
+                await ctx.send("API-client is niet geïnitialiseerd.")
                 return
             country_list = await self._fetch_country_list(ctx)
             if country_list is None:
@@ -1338,13 +1353,13 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         try:
             buckets, last_updated = await self._db.get_skill_reset_cooldown_by_level_buckets(cid)
         except Exception as exc:
-            await ctx.send(f"Database error: {exc}")
+            await ctx.send(f"Databasefout: {exc}")
             return
 
         if not buckets:
             await ctx.send(
-                f"No citizen skill-reset data cached for **{country_name}** yet.\n"
-                f"Run `/poll_citizens{' ' + country if country else ''}` to build the cache."
+                f"Nog geen gecachte vaardigheidsdata voor **{country_name}**.\n"
+                f"Run `/peil_burgers{' ' + country if country else ''}` om de cache op te bouwen."
             )
             return
 
@@ -1434,16 +1449,16 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         for embed in page_embeds:
             await ctx.send(embed=embed)
 
-    @commands.hybrid_command(name="poll_citizens", description="Refresh citizen level cache.")
-    @app_commands.describe(country="Country code or name, or leave blank for all countries")
+    @commands.hybrid_command(name="peil_burgers", description="Ververs de cache voor burgersniveaus.")
+    @app_commands.describe(country="Landcode of naam, of leeg laten voor alle landen")
     @_has_privileged_role()
     async def poll_citizens(self, ctx: Context, country: str | None = None):
         """Refresh the citizen level cache for one country, or all countries if no argument given.
 
-        Usage: ``/poll_citizens NL``  or  ``/poll_citizens`` (all)
+        Usage: ``/peil_burgers NL``  or  ``/peil_burgers`` (all)
         """
         if not self._client or not self._db or not self._citizen_cache:
-            await ctx.send("Services not initialized.")
+            await ctx.send("Diensten niet geïnitialiseerd.")
             return
 
         if hasattr(ctx, 'defer'):
@@ -1455,7 +1470,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         if country:
             target = find_country(country, country_list)
             if target is None:
-                await ctx.send(f"Country `{country}` not found.")
+                await ctx.send(f"Land `{country}` niet gevonden.")
                 return
             countries = [target]
         else:
@@ -1463,7 +1478,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
 
         n = len(countries)
         label = f"**{countries[0].get('name', country)}**" if n == 1 else f"**{n}** countries"
-        status_msg = await ctx.send(f"Starting citizen level refresh for {label}…")
+        status_msg = await ctx.send(f"Burgersniveau-verversing gestart voor {label}…")
 
         import time
         t_start = time.monotonic()
@@ -1508,11 +1523,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         try:
             resp = await self._client.get("/country.getAllCountries")
         except Exception as exc:
-            await ctx.send(f"Failed to fetch countries: {exc}")
+            await ctx.send(f"Ophalen van landen mislukt: {exc}")
             return None
         result = extract_country_list(resp)
         if not result:
-            await ctx.send("Could not retrieve country list from API.")
+            await ctx.send("Kon landenlijst niet ophalen van API.")
             return None
         return result
 
