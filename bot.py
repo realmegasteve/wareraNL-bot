@@ -7,6 +7,7 @@ Version: 6.5.0
 """
 
 import argparse
+import asyncio
 import json
 import logging
 import os
@@ -113,6 +114,9 @@ class LoggingFormatter(logging.Formatter):
 logger = logging.getLogger("discord_bot")
 logger.setLevel(logging.DEBUG)
 
+# Ensure logs directory exists
+os.makedirs("logs", exist_ok=True)
+
 # Console handler
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(LoggingFormatter())
@@ -149,7 +153,7 @@ class DiscordBot(commands.Bot):
         self.invite_link = os.getenv("INVITE_LINK")
         self.config = self.load_config(config_path)
         self.start_time = discord.utils.utcnow()
-        
+        self.testing = False
     def load_config(self, config_path: str | Path | None = None) -> dict:
         """Load configuration from given JSON path (relative paths supported).
 
@@ -232,6 +236,8 @@ class DiscordBot(commands.Bot):
         self.database = DatabaseManager(
             connection=await aiosqlite.connect("database/database.db")
         )
+        if self.testing:
+            asyncio.create_task(_run_terminal_loop(self))
 
     async def on_disconnect(self) -> None:
         """
@@ -358,6 +364,127 @@ class DiscordBot(commands.Bot):
 # `bot` will be instantiated in __main__ after parsing CLI args to select config/token
 
 
+# ------------------------------------------------------------------ #
+# Terminal command runner (--testing mode)                            #
+# ------------------------------------------------------------------ #
+
+class _TerminalMessage:
+    """Returned by _TerminalContext.send(); supports .edit() for status messages."""
+    async def edit(self, *, content=None, **kwargs):
+        if content:
+            print(content, flush=True)
+
+
+class _TerminalTyping:
+    async def __aenter__(self): return self
+    async def __aexit__(self, *_): pass
+
+
+class _TerminalContext:
+    """Minimal duck-typed Context for invoking commands from stdin in --testing mode."""
+    def __init__(self, bot):
+        self.bot = bot
+        self.guild = bot.guilds[0] if bot.guilds else None
+
+        class _Author:
+            name = "Terminal"
+            bot = False
+        _Author.id = bot.owner_id or 0
+        self.author = _Author()
+        self.message = type("_M", (), {"content": "", "attachments": []})() 
+
+    async def send(self, content=None, *, embed=None, **kwargs):
+        if content:
+            print(content, flush=True)
+        if embed:
+            if getattr(embed, "title", None):
+                print(f"[{embed.title}]", flush=True)
+            if getattr(embed, "description", None):
+                print(embed.description, flush=True)
+            for field in getattr(embed, "fields", []):
+                print(f"  {field.name}: {field.value}", flush=True)
+        return _TerminalMessage()
+
+    async def reply(self, *args, **kwargs):
+        return await self.send(*args, **kwargs)
+
+    def typing(self):
+        return _TerminalTyping()
+
+    @property
+    def channel(self):
+        return self
+
+
+async def _run_terminal_loop(bot) -> None:
+    """Read lines from stdin and invoke prefix commands directly (--testing only)."""
+    import inspect
+    import shlex
+
+    await bot.wait_until_ready()
+    prefix = os.getenv("PREFIX", "!")
+    print(f"[Terminal] Ready. Type commands (e.g. {prefix}leaders)", flush=True)
+
+    loop = asyncio.get_event_loop()
+    while True:
+        try:
+            line = await loop.run_in_executor(None, sys.stdin.readline)
+        except Exception:
+            break
+        if not line:
+            break
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith('/'):
+            line = prefix + line[1:]
+        elif not line.startswith(prefix):
+            line = prefix + line
+        rest = line[len(prefix):]
+        try:
+            parts = shlex.split(rest)
+        except ValueError as e:
+            print(f"[Terminal] Parse error: {e}", flush=True)
+            continue
+        if not parts:
+            continue
+        cmd_name, *raw_args = parts
+        cmd = bot.get_command(cmd_name)
+        if cmd is None:
+            print(f"[Terminal] Unknown command: {cmd_name!r}", flush=True)
+            continue
+
+        ctx = _TerminalContext(bot)
+        params = list(cmd.clean_params.values())
+        call_kwargs = {}
+        pos_i = 0
+        for param in params:
+            if param.kind is inspect.Parameter.KEYWORD_ONLY:
+                joined = " ".join(raw_args[pos_i:])
+                call_kwargs[param.name] = joined if joined else (
+                    None if param.default is inspect.Parameter.empty else param.default
+                )
+                pos_i = len(raw_args)
+            elif param.kind is inspect.Parameter.VAR_POSITIONAL:
+                break
+            else:
+                if pos_i < len(raw_args):
+                    call_kwargs[param.name] = raw_args[pos_i]
+                    pos_i += 1
+                elif param.default is not inspect.Parameter.empty:
+                    call_kwargs[param.name] = param.default
+
+        try:
+            cog = cmd.cog
+            if cog:
+                await cmd.callback(cog, ctx, **call_kwargs)
+            else:
+                await cmd.callback(ctx, **call_kwargs)
+        except Exception:
+            import traceback as _tb
+            _tb.print_exc()
+
+
 # Main loop with reconnection logic
 async def main():
     """
@@ -392,7 +519,10 @@ if __name__ == "__main__":
     else:
         config_path = "testing_config.json" if args.testing else "config.json"
 
-    load_dotenv()
+    if args.testing:
+        load_dotenv(".env_test", override=True)
+    else:
+        load_dotenv()
 
     # Determine token env var name
     if args.token_env:
@@ -403,6 +533,7 @@ if __name__ == "__main__":
 
     # instantiate bot with chosen config
     bot = DiscordBot(config_path=config_path)
+    bot.testing = args.testing
     print(os.getenv(os.environ.get("BOT_TOKEN_ENV")))
     try:
         asyncio.run(main())
