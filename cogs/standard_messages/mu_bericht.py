@@ -30,7 +30,7 @@ class MUs(GenerateEmbeds, name="mus"):
     
     @commands.hybrid_command(
         name="mulijst",
-        description="Post de MU lijst in het huidige kanaal.",
+        description="Post de MU lijst in het MU-kanaal.",
     )
     @has_privileged_role()
     async def mulijst(self, context: Context) -> None:
@@ -95,7 +95,13 @@ class MUs(GenerateEmbeds, name="mus"):
         """Delete previously tracked messages, post fresh ones, save new IDs to JSON."""
         path = mus_path(getattr(self.bot, "testing", False))
 
-        # Delete old messages if we have IDs
+        # Bulk-delete recent bot messages (≤14 days) — covers the common case
+        try:
+            await channel.purge(limit=100, check=lambda m: m.author == self.bot.user)
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        # Also individually delete any tracked IDs that may be older than 14 days
         old_ids: list[int] = self.json_data.get("posted_message_ids", [])
         for msg_id in old_ids:
             try:
@@ -123,7 +129,24 @@ class MUs(GenerateEmbeds, name="mus"):
         msg = await channel.send(embed=explanation)
         new_ids.append(msg.id)
 
-        for embed_data in self.json_data.get("embeds", []):
+        # Sort embeds to match the button order in mu_roles.json
+        _PINNED_LABELS = {"Overige MU", "Wachtlijst"}
+        try:
+            roles_path_order = mu_roles_path(getattr(self.bot, "testing", False))
+            button_order = {
+                b["label"]: i
+                for i, b in enumerate(load_roles_template(roles_path_order).get("buttons", []))
+                if b.get("label") not in _PINNED_LABELS
+            }
+        except Exception:
+            button_order = {}
+
+        embeds_sorted = sorted(
+            self.json_data.get("embeds", []),
+            key=lambda e: button_order.get(e.get("title", ""), 9999),
+        )
+
+        for embed_data in embeds_sorted:
             try:
                 msg = await channel.send(embed=self.create_embed_from_data(embed_data))
                 new_ids.append(msg.id)
