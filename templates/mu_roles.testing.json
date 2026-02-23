@@ -3,75 +3,59 @@
   "description": "Geef aan bij welke MU je zit. Als je niet in een Nederlandse MU zit, kies dan voor 'Overige MU'. Wil je in de toekomst een MU-lid worden? Kies dan voor 'Wachtlijst' zodat we je kunnen pinggen als er een plek vrijkomt!",
   "buttons": [
     {
-      "label": "Korps Commando's",
-      "role_id": 1475268222595895388,
+      "label": "Korps Mariniers",
+      "role_id": 1475465021491380298,
       "style": "primary",
-      "row": 0,
-      "secondary_role_id": 1475268218535940190
+      "row": 0
+    },
+    {
+      "label": "Korps Commando's",
+      "role_id": 1475465823685443604,
+      "style": "primary",
+      "row": 0
+    },
+    {
+      "label": "De Heeren XVII",
+      "role_id": 1475464742209327204,
+      "style": "primary",
+      "row": 0
+    },
+    {
+      "label": "The Flying Dutchman",
+      "role_id": 1475466801730158707,
+      "style": "primary",
+      "row": 0
     },
     {
       "label": "De Nederlandse Bank",
-      "role_id": 1475268225662193946,
+      "role_id": 1475470788957175943,
       "style": "primary",
-      "row": 1,
-      "secondary_role_id": 1475268218535940190
-    },
-    {
-      "label": "Regiment Huzaren",
-      "role_id": 1475268226538668226,
-      "style": "primary",
-      "row": 1,
-      "secondary_role_id": 1475268218535940190
-    },
-    {
-      "label": "Luchtmobiele Brigade",
-      "role_id": 1475268227675455699,
-      "style": "primary",
-      "row": 2,
-      "secondary_role_id": 1475268218535940190
-    },
-    {
-      "label": "Regiment van Oranje",
-      "role_id": 1475268228539482224,
-      "style": "primary",
-      "row": 2,
-      "secondary_role_id": 1475268218535940190
+      "row": 0
     },
     {
       "label": "Van Speijk Eskader",
-      "role_id": 1475268229579673721,
+      "role_id": 1475470591472435221,
       "style": "primary",
-      "row": 2,
-      "secondary_role_id": 1475268218535940190
+      "row": 1
     },
     {
-      "label": "Oranje Huurlingen",
-      "role_id": 1475268230418530558,
+      "label": "Regiment Huzaren",
+      "role_id": 1475471406186889236,
       "style": "primary",
-      "row": 3,
-      "secondary_role_id": 1475268218535940190
+      "row": 1
     },
     {
       "label": "Overige MU",
-      "role_id": 1475268230921850974,
+      "role_id": 1475466532581539931,
       "style": "secondary",
-      "row": 3,
-      "secondary_role_id": 1475268218535940190
+      "row": 2
     },
     {
       "label": "Wachtlijst",
-      "role_id": 1475268232553435146,
+      "role_id": 1475471298225377456,
       "style": "secondary",
-      "row": 3,
-      "secondary_role_id": 1475268218535940190
-    },
-    {
-      "label": "De Heeren VII",
-      "role_id": 1475269520456159464,
-      "style": "primary",
-      "row": 1,
-      "secondary_role_id": 1475268218535940190
+      "row": 2
     }
   ],
-  "button_message_id": 1475282882535887011
+  "button_message_id": 1475471299362033674
 }

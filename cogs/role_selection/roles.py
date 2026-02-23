@@ -175,10 +175,12 @@ class Roles(commands.Cog, name="roles"):
         # Also load and register the general roles template (templates/roles.json)
         try:
             general_template = load_roles_template(f"{TEMPLATES_PATH}/roles.json")
-            if general_template.get("buttons"):
+            if general_template.get("embeds"):
                 for embed_data in general_template["embeds"]:
                     if embed_data.get("buttons"):
                         self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=True))
+            elif general_template.get("buttons"):
+                self.bot.add_view(RoleToggleView(general_template["buttons"], exclusive=True))
         except Exception:
             # Fail quietly; commands will still load and can post the view manually
             pass
