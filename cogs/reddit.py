@@ -82,7 +82,7 @@ class RedditTracker(commands.Cog, name="reddit"):
 			self.logger.exception("Failed to write reddit state file")
 
 	async def _fetch_new(self) -> list[dict]:
-		url = f"https://www.reddit.com/r/{self.subreddit}/new.json?limit=5"
+		url = f"https://rss.app/feeds/v1.1/QpzeuVUPxN7QYtaA.json"
 		try:
 			self.logger.debug("Fetching URL: %s with headers: %s", url, self.session.headers)
 			async with self.session.get(url, timeout=15, allow_redirects=True) as resp:
@@ -106,6 +106,7 @@ class RedditTracker(commands.Cog, name="reddit"):
 	async def _poll(self) -> None:
 		posts = await self._fetch_new()
 		if not posts:
+			self.logger.warning("No posts found")
 			return
 
 		# Collect posts newer than last_seen; Reddit returns newest first
@@ -117,6 +118,7 @@ class RedditTracker(commands.Cog, name="reddit"):
 				break
 
 		if not new_posts:
+			self.logger.info("No new posts since last poll")
 			return
 
 		# oldest-first
@@ -200,7 +202,7 @@ async def main():
 	headers = {"User-Agent": "WarEraNL-bot/1.0 (by /u/Creepino +https://github.com/colgre/wareraNL-bot)"}
 
 	async with httpx.AsyncClient(http1=True) as client:
-		response = await client.get(url, headers=headers)
+		response = await client.get("https://rss.app/feeds/v1.1/QpzeuVUPxN7QYtaA.json", headers=headers)
 		print("HTTPX Response Status:", response.status_code)
 		if response.status_code == 200:
 			print("HTTPX Response:", response.json())
