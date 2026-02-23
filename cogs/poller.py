@@ -358,11 +358,12 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 channel = guild.get_channel(channel_id)
                 if channel:
                     try:
-                        await channel.send(
-                            f"⚡ **{item}** nieuwe kortetermijnleider: **{region_name}** — "
-                            f"**{bonus}%** totaal"
-                            + (f" ⏳ {duration}" if duration else "")
-                        )
+                        # await channel.send(
+                        #     f"⚡ **{item}** nieuwe kortetermijnleider: **{region_name}** — "
+                        #     f"**{bonus}%** totaal"
+                        #     + (f" ⏳ {duration}" if duration else "")
+                        # )
+                        pass
                     except Exception:
                         self.bot.logger.exception("Failed sending deposit update for %s", item)
 
@@ -1525,6 +1526,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
 
         Usage: ``/peil_burgers NL``  or  ``/peil_burgers`` (all)
         """
+        self.bot.logger.info("Starting citizen poll")
         if not self._client or not self._db or not self._citizen_cache:
             await ctx.send("Diensten niet geïnitialiseerd.")
             return
