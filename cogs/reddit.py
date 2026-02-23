@@ -22,6 +22,7 @@ import feedparser
 import httpx
 from curl_cffi.requests import AsyncSession
 import time
+from zoneinfo import ZoneInfo
 import html
 
 import yarl
@@ -95,7 +96,7 @@ class RedditTracker(commands.Cog, name="reddit"):
 	async def _fetch_new(self) -> list[dict]:
 		url = f"https://rss.app/feeds/v1.1/QpzeuVUPxN7QYtaA.json"
 		try:
-			url = f"https://old.reddit.com/r/wareranl/new/.rss"
+			url = f"https://reddit.com/r/wareranl/new/.rss"
 			headers = {
 				"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
 				"Accept-Language": "en-US,en;q=0.5",
@@ -131,7 +132,7 @@ class RedditTracker(commands.Cog, name="reddit"):
 					p["permalink"] = entry.get("link")
 					p["url"] = p.get("permalink")
 					p["selftext"] = entry.get("content") or ""
-					p["created_utc"] = entry.get("published_parsed")
+					p["created"] = entry.get("published_parsed")
 					p["author"] = entry.get("author")
 					p["image"] = entry.get("media_thumbnail")
 					posts.append(p)
@@ -239,14 +240,27 @@ class RedditTracker(commands.Cog, name="reddit"):
 							embed.set_author(name=f"{author}")
 						except Exception as e:
 							self.logger.warning(f"Failed to set author for post {post_name}: {e}")
-					created_utc = post.get("created_utc")
-					if created_utc:
-						# convert struct_time to datetime if needed
-						if isinstance(created_utc, (int, float)):
-							created_utc = datetime.datetime.fromtimestamp(created_utc, tz=datetime.timezone.utc)
-						elif isinstance(created_utc, time.struct_time):
-							created_utc = datetime.datetime(*created_utc[:6])
-						embed.timestamp = created_utc
+					created_time = post.get("created")
+					if created_time:
+						# Always construct a timezone-aware datetime in UTC, then convert
+						# to the desired local timezone (Europe/Amsterdam) for display.
+						try:
+							if isinstance(created_time, (int, float)):
+								dt = datetime.datetime.fromtimestamp(created_time, tz=datetime.timezone.utc)
+							elif isinstance(created_time, time.struct_time):
+								# struct_time is typically in UTC from feedparser
+								dt = datetime.datetime(*created_time[:6], tzinfo=datetime.timezone.utc)
+							else:
+								# Fallback: try to parse as string timestamp
+								dt = datetime.datetime.fromisoformat(str(created_time))
+							# Convert to Europe/Amsterdam for NL local time
+							local_tz = ZoneInfo("Europe/Amsterdam")
+							dt = dt.astimezone(local_tz)
+						except Exception:
+							# As a fallback, assign without timezone
+							dt = None
+						if dt:
+							embed.timestamp = dt
 					
 					selftext = post.get("selftext", "")
 					if selftext:
