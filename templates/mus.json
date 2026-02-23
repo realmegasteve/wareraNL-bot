@@ -22,7 +22,7 @@
         },
         {
             "title": "De Nederlandse Bank",
-            "description": "[**Eco MU**](https://app.warera.io/mu/697de1e370af1f7f8aa169ea)",
+            "description": "[**Standaard MU**](https://app.warera.io/mu/697de1e370af1f7f8aa169ea)",
             "thumbnail": "https://media.warera.io/avatars/mu/mu-697de1e370af1f7f8aa169ea-1769857667228-r8i3fnrp.png"
         },
         {
@@ -49,7 +49,31 @@
             "title": "Oranje Huurlingen",
             "description": "[**Standaard MU**](https://app.warera.io/mu/69906c5a8b9151ad2ba50435)",
             "thumbnail": "https://media.warera.io/avatars/mu/mu-69906c5a8b9151ad2ba50435-1771094271985-uomonkkc.png"
+        },
+        {
+            "title": "Duytenberg",
+            "description": "[**Eco MU**](https://app.warera.io/mu/699b1d30b34e1837aaf9c1bf)",
+            "thumbnail": "https://media.warera.io/avatars/mu/mu-699b1d30b34e1837aaf9c1bf-1771774830441-nfjy03l9.png"
+        },
+        {
+            "title": "MIVD",
+            "description": "[**Standaard MU**](https://app.warera.io/mu/699bf0f5b232a1efde5b9aed)",
+            "thumbnail": "https://media.warera.io/avatars/mu/mu-699bf0f5b232a1efde5b9aed-1771828191040-h1uvx1ml.png"
         }
-
+    ],
+    "posted_message_ids": [
+        1475445690363809822,
+        1475445692028686398,
+        1475445693530378290,
+        1475445694885265539,
+        1475445696093094049,
+        1475445697305383014,
+        1475445716561170473,
+        1475445718368915597,
+        1475445719727870014,
+        1475445721191682089,
+        1475445722051772491,
+        1475445723943141456,
+        1475445743090401332
     ]
 }
