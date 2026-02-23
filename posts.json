@@ -1,0 +1,474 @@
+{
+    "version": "https://jsonfeed.org/version/1.1",
+    "title": "WarEraNL",
+    "home_page_url": "https://reddit.com/r/wareranl",
+    "feed_url": "https://rss.app/feeds/v1.1/QpzeuVUPxN7QYtaA.json",
+    "favicon": "https://styles.redditmedia.com/t5_g9j12e/styles/communityIcon_i3aqg3a29pag1.png",
+    "language": "en",
+    "description": "Nederlandse community voor het spel: WarEra.io.\n\nJoin de discord hier:\nhttps://discord.gg/j5XR4YHr",
+    "items": [
+        {
+            "id": "ccb50f7082d241d699d10382c07ff104",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1rccl13/23022026_map_of_europe_wareraio/",
+            "title": "[23-02-2026] Map of Europe [WarEra.io]",
+            "content_text": "Duitsland is 2 gebieden kwijt geraakt:\n\n\nAan Luxemburg! Die nu wel erg groot aan het worden is op de kaart\nAan de Zwitsers, die een stuk van hun eigen grondgebied terug hebben gepakt!\n\n\nZullen de Duitsers de tegenaanval in gaan zetten?\n\nDoe hier mee: https://app.warera.io/\n",
+            "content_html": "<div><img src=\"https://i.redd.it/g601b1jam7lg1.png\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Duitsland is 2 gebieden kwijt geraakt:</p>\n\n<ul>\n<li>Aan Luxemburg! Die nu wel erg groot aan het worden is op de kaart</li>\n<li>Aan de Zwitsers, die een stuk van hun eigen grondgebied terug hebben gepakt!</li>\n</ul>\n\n<p>Zullen de Duitsers de tegenaanval in gaan zetten?</p>\n\n<p>Doe hier mee: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io/</a></p>\n</div></div></div>",
+            "image": "https://i.redd.it/g601b1jam7lg1.png",
+            "date_published": "2026-02-23T09:05:56.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/g601b1jam7lg1.png"
+                }
+            ]
+        },
+        {
+            "id": "8d86ee5d5d9085d246b20299bc513a86",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1rby3ej/dark_tinted_amber/",
+            "title": "Dark tinted amber",
+            "content_text": "",
+            "date_published": "2026-02-22T21:23:04.000Z",
+            "authors": [
+                {
+                    "name": "amyor9k"
+                }
+            ]
+        },
+        {
+            "id": "89e995436663f9c5e66e007118254b15",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1rbxhao/luxemburg_valt_duitsland_binnen_wareraio/",
+            "title": "Luxemburg valt Duitsland binnen! [WarEra.io]",
+            "content_text": "Opmerkelijk: Luxemburg is Duitsland binnengevallen (én is aan de winnende hand!) - onder andere gesteund door de V.S. en Litouwen!\n\nTegelijkertijd komen ook de Zwitsers in opstand! Hoe zal de kaart van Europa er morgen uit zien?\n\nDoe je nog niet mee? Join hier: https://app.warera.io\n",
+            "content_html": "<div><img src=\"https://i.redd.it/6qjt26qs04lg1.png\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Opmerkelijk: Luxemburg is Duitsland binnengevallen (én is aan de winnende hand!) - onder andere gesteund door de V.S. en Litouwen!</p>\n\n<p>Tegelijkertijd komen ook de Zwitsers in opstand! Hoe zal de kaart van Europa er morgen uit zien?</p>\n\n<p>Doe je nog niet mee? Join hier: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io</a></p>\n</div></div></div>",
+            "image": "https://i.redd.it/6qjt26qs04lg1.png",
+            "date_published": "2026-02-22T20:59:44.000Z",
+            "authors": [
+                {
+                    "name": "Zezimama"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/6qjt26qs04lg1.png"
+                }
+            ]
+        },
+        {
+            "id": "836bf61617f697064f28d8d1afa8a1e2",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1rbo6pg/waar_zijn_onze_zuiderburen_mee_bezig/",
+            "title": "Waar zijn onze zuiderburen mee bezig?",
+            "content_text": "",
+            "image": "https://i.redd.it/h1facmgma2lg1.jpeg",
+            "date_published": "2026-02-22T15:09:06.000Z",
+            "authors": [
+                {
+                    "name": "FunzOrlenard"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/h1facmgma2lg1.jpeg"
+                }
+            ]
+        },
+        {
+            "id": "d71dbf43a036c8d871aad2323f614c3b",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1rbo4x1/_/",
+            "title": "👀",
+            "content_text": "",
+            "image": "https://i.redd.it/x13s7tr7a2lg1.png",
+            "date_published": "2026-02-22T15:07:06.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/x13s7tr7a2lg1.png"
+                }
+            ]
+        },
+        {
+            "id": "8ab821946029a1dbe8c7f6f639c5509e",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1rbjvnl/22022026_overview_of_all_continents_wareraio/",
+            "title": "[22-02-2026] Overview of all continents [WarEra.io]",
+            "content_text": "Join us here / doe hier mee: https://app.warera.io/\n",
+            "content_html": "<div><img src=\"https://preview.redd.it/3pgr1qaka1lg1.png?width=962&format=png&auto=webp&s=565d8711abaec8c2d2ef5959487c15febac321ba\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Join us here / doe hier mee: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io/</a></p>\n</div></div></div>",
+            "image": "https://preview.redd.it/3pgr1qaka1lg1.png?width=962&format=png&auto=webp&s=565d8711abaec8c2d2ef5959487c15febac321ba",
+            "date_published": "2026-02-22T11:48:26.000Z",
+            "authors": [
+                {
+                    "name": "Zezimama"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://preview.redd.it/3pgr1qaka1lg1.png?width=962&format=png&auto=webp&s=565d8711abaec8c2d2ef5959487c15febac321ba"
+                }
+            ]
+        },
+        {
+            "id": "31856a03fc44762e5186b51c84f3b4f3",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1rb4h4f/eindelijk_wareraio/",
+            "title": "Eindelijk [WarEra.io]",
+            "content_text": "Doe je nog niet mee? Speel hier met ons mee: https://app.warera.io/\n",
+            "content_html": "<div><img src=\"https://i.redd.it/x6lyvoftbxkg1.png\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Doe je nog niet mee? Speel hier met ons mee: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io/</a></p>\n</div></div></div>",
+            "image": "https://i.redd.it/x6lyvoftbxkg1.png",
+            "date_published": "2026-02-21T22:27:13.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/x6lyvoftbxkg1.png"
+                }
+            ]
+        },
+        {
+            "id": "51f44845c32e6f76dd221ec771f48a28",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1rarvgy/g_e_k_o_l_o_n_i_s_e_e_r_d_londen_editie_wareraio/",
+            "title": "G E K O L O N I S E E R D: Londen Editie [WarEra.io]",
+            "content_text": "",
+            "image": "https://external-preview.redd.it/MGNydzA5MDFoMmtnMREgUCPcna6wZj5_l9t95PngHr01LsX6wEQIMU32Bqp-.png?auto=webp&s=f16a1708de018de2441ff08599297860da596b8e",
+            "date_published": "2026-02-21T14:02:41.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://external-preview.redd.it/MGNydzA5MDFoMmtnMREgUCPcna6wZj5_l9t95PngHr01LsX6wEQIMU32Bqp-.png?auto=webp&s=f16a1708de018de2441ff08599297860da596b8e"
+                }
+            ]
+        },
+        {
+            "id": "a321b287d536c92038644a2c608a0301",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1raopcq/nederland_heeft_de_britse_eilanden_veroverd/",
+            "title": "Nederland heeft de Britse eilanden veroverd! [WarEra.io]",
+            "content_text": "Na een snelle aanval vanuit Nederland hebben we binnen (5!!!) dagen de Britse Eilanden veroverd! Met dank aan onze zuiderburen voor hun fantastische hulp!\n\nIn de tussentijd is de bevolking van Venezuela geëxplodeerd naar bijna 1000 spelers (and counting!), dit zal vast gevolgen hebben voor de geopolitieke situatie aan de andere kant van de oceaan...\n\nDoe je nog niet mee? Speel hier met ons mee: https://app.warera.io/\n",
+            "content_html": "<div><img src=\"https://preview.redd.it/qe8aj63pztkg1.png?width=981&format=png&auto=webp&s=c82847fbf52943f385f7532a1ea386b950944df6\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Na een snelle aanval vanuit Nederland hebben we binnen (5!!!) dagen de Britse Eilanden veroverd! Met dank aan onze zuiderburen voor hun fantastische hulp!</p>\n\n<p>In de tussentijd is de bevolking van Venezuela geëxplodeerd naar bijna 1000 spelers (and counting!), dit zal vast gevolgen hebben voor de geopolitieke situatie aan de andere kant van de oceaan...</p>\n\n<p>Doe je nog niet mee? Speel hier met ons mee: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io/</a></p>\n</div></div></div>",
+            "image": "https://preview.redd.it/qe8aj63pztkg1.png?width=981&format=png&auto=webp&s=c82847fbf52943f385f7532a1ea386b950944df6",
+            "date_published": "2026-02-21T11:17:29.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://preview.redd.it/qe8aj63pztkg1.png?width=981&format=png&auto=webp&s=c82847fbf52943f385f7532a1ea386b950944df6"
+                }
+            ]
+        },
+        {
+            "id": "b5b2bd9327d0cef21798480890cfcea1",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r9nqgs/huidige_situatie_in_vnk/",
+            "title": "Huidige situatie in VNK",
+            "content_text": "Heb evenveel moeite gestoken in deze meem als zij in hun territoriale integriteit.\n",
+            "content_html": "<div><img src=\"https://i.redd.it/bma3t7gydlkg1.jpeg\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Heb evenveel moeite gestoken in deze meem als zij in hun territoriale integriteit.</p>\n</div></div></div>",
+            "image": "https://i.redd.it/bma3t7gydlkg1.jpeg",
+            "date_published": "2026-02-20T06:17:30.000Z",
+            "authors": [
+                {
+                    "name": "Ok_You_1162"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/bma3t7gydlkg1.jpeg"
+                }
+            ]
+        },
+        {
+            "id": "06fecc2769b5ddc21af66e00d92169cf",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r9n6l4/dutch_joint_invasion_of_the_british_isles/",
+            "title": "Dutch Joint invasion of the British Isles progress [Warera.io]",
+            "content_text": "",
+            "image": "https://i.redd.it/r8rveflt7lkg1.jpeg",
+            "date_published": "2026-02-20T05:46:38.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/r8rveflt7lkg1.jpeg"
+                }
+            ]
+        },
+        {
+            "id": "22d6a4510f4a39b1f081a3c9db78336f",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r97s56/19022026_nederland_veroverd_noord_ierland_wareraio/",
+            "title": "[19-02-2026] Nederland veroverd noord Ierland! [WarEra.io]",
+            "content_text": "De successen voor Nederland stapelen zich op! Na de verovering van Schotland is nu ook Noord-Ierland Nederlands grondgebied! De aanval op de rest van Ierland is nu ingezet, en de gevechten verlopen voorspoedig! Gaan we de volledige eilandengroep veroveren?\n\nIn anders nieuws: we hebben 400 Nederlandse actieve spelers bereikt! Een geweldig aantal! Wil je ook nog meestrijden? Doe hier mee: https://app.warera.io\n",
+            "content_html": "<div><img src=\"https://i.redd.it/qdi9fn49zhkg1.png\" style=\"width: 100%;\" /><div><div class=\"md\"><p>De successen voor Nederland stapelen zich op! Na de verovering van Schotland is nu ook Noord-Ierland Nederlands grondgebied! De aanval op de rest van Ierland is nu ingezet, en de gevechten verlopen voorspoedig! Gaan we de volledige eilandengroep veroveren?</p>\n\n<p>In anders nieuws: we hebben 400 Nederlandse actieve spelers bereikt! Een geweldig aantal! Wil je ook nog meestrijden? Doe hier mee: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io</a></p>\n</div></div></div>",
+            "image": "https://i.redd.it/qdi9fn49zhkg1.png",
+            "date_published": "2026-02-19T18:52:18.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/qdi9fn49zhkg1.png"
+                }
+            ]
+        },
+        {
+            "id": "978e1c44bab5f89f32968cc8ee758407",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r88e1t/18022026_nederland_heeft_2_britse_regios_veroverd/",
+            "title": "[18-02-2026] Nederland heeft 2 Britse regio’s veroverd! [WarEra.io]",
+            "content_text": "Nederland heeft zojuist twee Britse regio’s overgenomen in WarEra. De strijd tegen Schotland verloopt ook in ons voordeel en we liggen op koers om verder door te pakken!\n\nAan alle Nederlanders: sta paraat en help mee aan het front.\n\nDoe je nog niet mee? Speel hier mee!  https://app.warera.io/\n",
+            "content_html": "<div><img src=\"https://preview.redd.it/lqua3ca29akg1.png?width=832&format=png&auto=webp&s=59cff69468d2e82082b722cc3ce3bd081dc1e289\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Nederland heeft zojuist twee Britse regio’s overgenomen in WarEra. De strijd tegen Schotland verloopt ook in ons voordeel en we liggen op koers om verder door te pakken!</p>\n\n<p>Aan alle Nederlanders: sta paraat en help mee aan het front.</p>\n\n<p>Doe je nog niet mee? Speel hier mee!  <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io/</a></p>\n</div></div></div>",
+            "image": "https://preview.redd.it/lqua3ca29akg1.png?width=832&format=png&auto=webp&s=59cff69468d2e82082b722cc3ce3bd081dc1e289",
+            "date_published": "2026-02-18T16:54:37.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://preview.redd.it/lqua3ca29akg1.png?width=832&format=png&auto=webp&s=59cff69468d2e82082b722cc3ce3bd081dc1e289"
+                }
+            ]
+        },
+        {
+            "id": "f15b8f42cb093ef998f3a7b9676c632f",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r79h36/switzerland_not_so_neutral_anymore/",
+            "title": "Switzerland not so neutral anymore",
+            "content_text": "Join us here!: https://app.warera.io\n",
+            "content_html": "<div><img src=\"https://i.redd.it/3qudr2uds2kg1.png\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Join us here!: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io</a></p>\n</div></div></div>",
+            "image": "https://i.redd.it/3qudr2uds2kg1.png",
+            "date_published": "2026-02-17T15:45:17.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/3qudr2uds2kg1.png"
+                }
+            ]
+        },
+        {
+            "id": "3683750b91deeb988fa20d7bfd6a16e4",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r77tcx/g_e_k_o_l_o_n_i_s_e_e_r_d_londen_editie_wareraio/",
+            "title": "G E K O L O N I S E E R D: Londen Editie [WarEra.io]",
+            "content_text": "Vecht hier mee: https://app.warera.io/\n",
+            "content_html": "<div><img src=\"https://external-preview.redd.it/MGNydzA5MDFoMmtnMREgUCPcna6wZj5_l9t95PngHr01LsX6wEQIMU32Bqp-.png?width=140&height=78&format=jpg&auto=webp&s=052127117ee5c9011459e7ee284abdcfa369b6a9\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Vecht hier mee: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io/</a></p>\n</div></div></div>",
+            "image": "https://external-preview.redd.it/MGNydzA5MDFoMmtnMREgUCPcna6wZj5_l9t95PngHr01LsX6wEQIMU32Bqp-.png?width=140&height=78&format=jpg&auto=webp&s=052127117ee5c9011459e7ee284abdcfa369b6a9",
+            "date_published": "2026-02-17T14:42:35.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://external-preview.redd.it/MGNydzA5MDFoMmtnMREgUCPcna6wZj5_l9t95PngHr01LsX6wEQIMU32Bqp-.png?width=140&height=78&format=jpg&auto=webp&s=052127117ee5c9011459e7ee284abdcfa369b6a9"
+                }
+            ]
+        },
+        {
+            "id": "1549fcff8a74eb1cb4084b5b84482819",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r77cy3/ronde_1_van_de_slag_om_londen_gewonnen/",
+            "title": "Ronde 1 van de slag om Londen gewonnen!",
+            "content_text": "Ronde 1 van de slag om Londen is overduidelijk gewonnen door Nederland!\n\nWil je Nederland ook helpen? Speel gratis mee op https://app.warera.io\n",
+            "content_html": "<div><img src=\"https://i.redd.it/yym8nr2td2kg1.png\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Ronde 1 van de slag om Londen is overduidelijk gewonnen door Nederland!</p>\n\n<p>Wil je Nederland ook helpen? Speel gratis mee op <a href=\"https://app.warera.io?referrerId=6974a894386d4d016786c424\">https://app.warera.io</a></p>\n</div></div></div>",
+            "image": "https://i.redd.it/yym8nr2td2kg1.png",
+            "date_published": "2026-02-17T14:24:19.000Z",
+            "authors": [
+                {
+                    "name": "Wide_Conference8977"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/yym8nr2td2kg1.png"
+                }
+            ]
+        },
+        {
+            "id": "d26d441a5e8846250c3fd9352ff85f64",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r6zl2j/onderweg_naar_het_uk_binnenkort_nlk_stond_nog_een/",
+            "title": "Onderweg naar het UK (binnenkort NLK 🇳🇱) stond nog een verdwaalde Fransman in de weg.",
+            "content_text": "",
+            "image": "https://preview.redd.it/aa5k6jqab0kg1.jpg?width=1024&format=pjpg&auto=webp&s=bbeb45061ef9369eb869a637d0e65f6b050f75d1",
+            "date_published": "2026-02-17T07:25:11.000Z",
+            "authors": [
+                {
+                    "name": "Soggy-Muscle-9472"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://preview.redd.it/aa5k6jqab0kg1.jpg?width=1024&format=pjpg&auto=webp&s=bbeb45061ef9369eb869a637d0e65f6b050f75d1"
+                }
+            ]
+        },
+        {
+            "id": "a03053986403581eda7a554f86da5056",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r6kshe/oorlogsverklaring_wareraio/",
+            "title": "🇳🇱/🇧🇪 OORLOGSVERKLARING 🇬🇧 [WarEra.io]",
+            "content_text": "Code ROOD! Nederland heeft (samen met België) officieel de oorlog verklaard aan het Verenigd Koninkrijk!\n\nNederland heeft momenteel 346 spelers, en het V.K. 24. Door de hoge levels van het V.K. is het echter niet zomaar gespeeld! Check de Discord voor de laatste ontwikkelingen en de strategie van onze ministers! Lees hierrr de officiele oorlogsverklaring van onze minister buitenlandse zaken.\n\nWil je meevechten? Doe dan hier nu direct mee: https://app.warera.io/\n",
+            "content_html": "<div><img src=\"https://preview.redd.it/3w4i2vvx0xjg1.png?width=1536&format=png&auto=webp&s=eedae490ef7e29d7e928cde83d1aef1aef253af0\" style=\"width: 100%;\" /><div><div class=\"md\"><p><strong>Code ROOD!</strong> Nederland heeft (samen met België) officieel de oorlog verklaard aan het <strong>Verenigd Koninkrijk</strong>!</p>\n\n<p>Nederland heeft momenteel <strong>346</strong> spelers, en het V.K. <strong>24.</strong> Door de hoge levels van het V.K. is het echter niet zomaar gespeeld! Check de Discord voor de laatste ontwikkelingen en de strategie van onze ministers! Lees <a href=\"https://app.warera.io/article/69937864312d5d00793eeb75\">hierrr </a>de officiele oorlogsverklaring van onze minister buitenlandse zaken.</p>\n\n<p>Wil je meevechten? Doe dan hier nu direct mee: <a href=\"https://app.warera.io/?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io/</a></p>\n</div></div></div>",
+            "image": "https://preview.redd.it/3w4i2vvx0xjg1.png?width=1536&format=png&auto=webp&s=eedae490ef7e29d7e928cde83d1aef1aef253af0",
+            "date_published": "2026-02-16T20:23:05.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://preview.redd.it/3w4i2vvx0xjg1.png?width=1536&format=png&auto=webp&s=eedae490ef7e29d7e928cde83d1aef1aef253af0"
+                }
+            ]
+        },
+        {
+            "id": "d76c4fc28b044a2522157d45444540e4",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r4waya/strijd_mee_voor_het_vaderland/",
+            "title": "Strijd mee voor het vaderland!",
+            "content_text": "sluit je hier aan: https://app.warera.io\n",
+            "content_html": "<div><img src=\"https://external-preview.redd.it/bjVpMmh6NG8xampnMWleJgdjNKYhBh6kiLhNzqKLoubTbP_keXqIaULFU6u3.png?width=140&height=140&crop=1:1,smart&format=jpg&auto=webp&s=b1e179883862c1108f73ca127330a5099b012716\" style=\"width: 100%;\" /><div><div class=\"md\"><p>sluit je hier aan: <a href=\"https://app.warera.io?referrerId=698a4c04ebeadcc76977f353\">https://app.warera.io</a></p>\n</div></div></div>",
+            "image": "https://external-preview.redd.it/bjVpMmh6NG8xampnMWleJgdjNKYhBh6kiLhNzqKLoubTbP_keXqIaULFU6u3.png?width=140&height=140&crop=1:1,smart&format=jpg&auto=webp&s=b1e179883862c1108f73ca127330a5099b012716",
+            "date_published": "2026-02-14T21:22:11.000Z",
+            "authors": [
+                {
+                    "name": "diamondhands4200"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://external-preview.redd.it/bjVpMmh6NG8xampnMWleJgdjNKYhBh6kiLhNzqKLoubTbP_keXqIaULFU6u3.png?width=140&height=140&crop=1:1,smart&format=jpg&auto=webp&s=b1e179883862c1108f73ca127330a5099b012716"
+                }
+            ]
+        },
+        {
+            "id": "f40b7a87da30755eddddc6e524fb9489",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r4im3f/update_het_ambassadeursbeleid/",
+            "title": "Update: het ambassadeursbeleid",
+            "content_text": "Auteur: Jopie\n\nUpdate: het ambassadeursbeleid\n\nHet is nu een week geleden sinds de invoering van het nieuwe ambassadeursbeleid en het Ministerie van Buitenlandse Zaken van Nederland heeft de afgelopen periode een indrukwekkende uitbreiding van het diplomatieke netwerk gerealiseerd. In korte tijd zijn tientallen ambassades geopend, verspreid over alle continenten, waarmee Nederland zich stevig positioneert op het wereldtoneel. We zijn erg blij met al onze topambassadeurs, die met vol enthousiasme Nederland internationaal vertegenwoordigen.\n\nOnder directe verantwoordelijkheid van de minister van Buitenlandse Zaken Jopie vallen de ambassades in de Verenigde Staten, België, Litouwen, Polen, Frankrijk, Portugal, Roemenië, Zweden, Duitsland, Servië en India.\n\nDaarnaast is een sterk team van ambassadeurs actief. 2sa vertegenwoordigt Nederland in de African Union, het grote Afrikaanse bondgenootschap,  waarmee de Afrikaanse diplomatie aanzienlijk is versterkt.\n\nFeta beheert de ambassades in Denemarken, IJsland en Cyprus, terwijl JonasDeWalvis actief is in het Verenigd Koninkrijk, Italië en Letland. BeneficentLynx vertegenwoordigt Nederland in Spanje, Turkije en Oekraïne.\n\nIn Zuid-Amerika onderhoudt DiligentDoubt de diplomatieke relaties met Argentinië, Chili, Venezuela en Brazilië. Woundism is verantwoordelijk voor Uruguay, Peru en Colombia.\n\nMataBrother beheert de ambassades in Oostenrijk, Zwitserland en de Filipijnen. Valkyrrr vertegenwoordigt Nederland in Australië en Indonesië. Imdare is actief in Hongarije, Kroatië, Griekenland en Bulgarije.\n\nDaarnaast zijn er individuele posten toegewezen aan TimoVink in Canada.\n\nAmbassadeposten beschikbaar\n\nEr zijn nog ambassadeposten beschikbaar voor onder meer China, Japan, Taiwan, Irak, Egypte, Palestina, Vaticaanstad, Paraguay, Nieuw-Zeeland, Ierland, Tunesië, Finland, Noorwegen, Estland en Brunei. Als een land hier niet tussen staat, maar waar je wel graag ambassadeur van zou willen worden, stuur mij dan een bericht.\n\nMet deze brede wereldwijde spreiding heeft Nederland een solide diplomatiek fundament gelegd. Het netwerk stelt ons in staat om actief relaties te onderhouden, strategische partnerschappen uit te bouwen en onze internationale positie te versterken.\n\nBen je geïnteresseerd in een baan als ambassadeur? Stuur Jopie dan even een bericht via Discord.\n\nDoe je nog niet mee met WarEra? Join hier: https://app.warera.io/, en zeg even hoi in de chat!\n",
+            "content_html": "<div><img src=\"https://preview.redd.it/fxepn3wk6gjg1.png?width=140&height=49&auto=webp&s=1ebd60ffe40e4426805cef8a885081740ca82243\" style=\"width: 100%;\" /><div><div class=\"md\"><p><a href=\"https://preview.redd.it/fxepn3wk6gjg1.png?width=960&format=png&auto=webp&s=8fa0a6dc8dfbc54b89fb0befe62afa391bcb9452\">Auteur: Jopie</a></p>\n\n<h1>Update: het ambassadeursbeleid</h1>\n\n<p>Het is nu een week geleden sinds de invoering van het nieuwe ambassadeursbeleid en het Ministerie van Buitenlandse Zaken van Nederland heeft de afgelopen periode een indrukwekkende uitbreiding van het diplomatieke netwerk gerealiseerd. In korte tijd zijn tientallen ambassades geopend, verspreid over alle continenten, waarmee Nederland zich stevig positioneert op het wereldtoneel. We zijn erg blij met al onze topambassadeurs, die met vol enthousiasme Nederland internationaal vertegenwoordigen.</p>\n\n<p>Onder directe verantwoordelijkheid van de minister van Buitenlandse Zaken <a href=\"https://app.warera.io/user/6956e01b27ffa6262388b8b3\"><strong>Jopie</strong> </a>vallen de ambassades in de Verenigde Staten, België, Litouwen, Polen, Frankrijk, Portugal, Roemenië, Zweden, Duitsland, Servië en India.</p>\n\n<p>Daarnaast is een sterk team van ambassadeurs actief. <a href=\"https://app.warera.io/user/692ee8d8d930f58a92c19dd3\"><strong>2sa</strong></a> vertegenwoordigt Nederland in de African Union, het grote Afrikaanse bondgenootschap,  waarmee de Afrikaanse diplomatie aanzienlijk is versterkt.</p>\n\n<p><a href=\"https://app.warera.io/user/6980dea6fe49beb7241a6d5f\"><strong>Feta</strong></a> beheert de ambassades in Denemarken, IJsland en Cyprus, terwijl <a href=\"https://app.warera.io/user/6958565ce0e97b0f4b0d7346\"><strong>JonasDeWalvis</strong></a> actief is in het Verenigd Koninkrijk, Italië en Letland. <a href=\"https://app.warera.io/user/695652616cf856e1c4657af9\"><strong>BeneficentLynx</strong></a> vertegenwoordigt Nederland in Spanje, Turkije en Oekraïne.</p>\n\n<p>In Zuid-Amerika onderhoudt <a href=\"https://app.warera.io/user/69542e947a4dd513077e183b\"><strong>DiligentDoubt</strong></a> de diplomatieke relaties met Argentinië, Chili, Venezuela en Brazilië. <a href=\"https://app.warera.io/user/697659f519ce30d0b6d65d43\"><strong>Woundism</strong></a> is verantwoordelijk voor Uruguay, Peru en Colombia.</p>\n\n<p><a href=\"https://app.warera.io/user/697cca9653d6ad7bf1bedcc3\"><strong>MataBrother</strong></a> beheert de ambassades in Oostenrijk, Zwitserland en de Filipijnen. <a href=\"https://app.warera.io/user/69820c895312557c1f363ab7\"><strong>Valkyrrr</strong></a> vertegenwoordigt Nederland in Australië en Indonesië. <a href=\"https://app.warera.io/user/6977fa0529f63efefd23da2f\"><strong>Imdare</strong></a> is actief in Hongarije, Kroatië, Griekenland en Bulgarije.</p>\n\n<p>Daarnaast zijn er individuele posten toegewezen aan <a href=\"https://app.warera.io/user/69768c6c6363ef33d61b8963\"><strong>TimoVink</strong> </a>in Canada.</p>\n\n<h1>Ambassadeposten beschikbaar</h1>\n\n<p>Er zijn nog ambassadeposten beschikbaar voor onder meer China, Japan, Taiwan, Irak, Egypte, Palestina, Vaticaanstad, Paraguay, Nieuw-Zeeland, Ierland, Tunesië, Finland, Noorwegen, Estland en Brunei. Als een land hier niet tussen staat, maar waar je wel graag ambassadeur van zou willen worden, stuur mij dan een bericht.</p>\n\n<p>Met deze brede wereldwijde spreiding heeft Nederland een solide diplomatiek fundament gelegd. Het netwerk stelt ons in staat om actief relaties te onderhouden, strategische partnerschappen uit te bouwen en onze internationale positie te versterken.</p>\n\n<p>Ben je geïnteresseerd in een baan als ambassadeur? Stuur <strong>Jopie</strong> dan even een bericht via Discord.</p>\n\n<p>Doe je nog niet mee met WarEra? Join hier: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io/</a>, en zeg even hoi in de chat!</p>\n</div></div></div>",
+            "image": "https://preview.redd.it/fxepn3wk6gjg1.png?width=140&height=49&auto=webp&s=1ebd60ffe40e4426805cef8a885081740ca82243",
+            "date_published": "2026-02-14T11:44:20.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://preview.redd.it/fxepn3wk6gjg1.png?width=140&height=49&auto=webp&s=1ebd60ffe40e4426805cef8a885081740ca82243"
+                }
+            ]
+        },
+        {
+            "id": "0de443a064ac074b379b4048da026c5c",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r41nyq/de_tegguhpartij_is_dr_klaah_voâh_om_dat_torentje/",
+            "title": "De tegguhpartij is d’r klaah voâh om dat torentje te bestijge",
+            "content_text": "Word lid van de tegguhpartij, want wij kenne het verschil make tusse ouwe koek en vers beleid. Sluit je an, dan gaan we samen dat torentje bestijge met pit, pleuris en principes!\n",
+            "content_html": "<div><img src=\"https://i.redd.it/9w1w5a8pxbjg1.jpeg\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Word lid van de tegguhpartij, want wij kenne het verschil make tusse ouwe koek en vers beleid. Sluit je an, dan gaan we samen dat torentje bestijge met pit, pleuris en principes!</p>\n</div></div></div>",
+            "image": "https://i.redd.it/9w1w5a8pxbjg1.jpeg",
+            "date_published": "2026-02-13T21:26:14.000Z",
+            "authors": [
+                {
+                    "name": "Fietsendief69"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/9w1w5a8pxbjg1.jpeg"
+                }
+            ]
+        },
+        {
+            "id": "055470ae42ea8f6fdb3270da5e9eacd0",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r3qaqe/de_filipijnen_halen_ons_in_wareraio/",
+            "title": "De Filipijnen halen ons in! [WarEra.io]",
+            "content_text": "Help mee om Nederland nummer 1 te houden: https://app.warera.io/\n",
+            "content_html": "<div><img src=\"https://i.redd.it/l18p11hus9jg1.png\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Help mee om Nederland nummer 1 te houden: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io/</a></p>\n</div></div></div>",
+            "image": "https://i.redd.it/l18p11hus9jg1.png",
+            "date_published": "2026-02-13T14:16:17.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/l18p11hus9jg1.png"
+                }
+            ]
+        },
+        {
+            "id": "32e85e8792a170627cc230ecbaaa14a6",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r3isjs/13022026_warera_europe_update_wareraio/",
+            "title": "[13-02-2026] WarEra Europe update [WarEra.io]",
+            "content_text": "\nDe VS hebben de hoofdstad van Spanje opgeslokt! Na een aanval van Spanje op Amerikaans grondgebied, hebben ze nu kei-hard teruggeslagen... \nFrankrijk heeft enkele gebieden van Spanje overgenomen, om de -25% damage boost tegen te gaan\nZal de VS verder Europa intrekken??\nDe Balkan oorlog lijkt ten einde: Roemenië is van de kaart geveegd\n\n\nJe kan hier mee doen, als je met andere Nederlanders mee wilt vechten: https://app.warera.io/\n",
+            "content_html": "<div><img src=\"https://i.redd.it/eofyl65jq7jg1.png\" style=\"width: 100%;\" /><div><div class=\"md\"><ul>\n<li>De VS hebben de hoofdstad van Spanje opgeslokt! Na een aanval van Spanje op Amerikaans grondgebied, hebben ze nu kei-hard teruggeslagen... </li>\n<li>Frankrijk heeft enkele gebieden van Spanje overgenomen, om de -25% damage boost tegen te gaan</li>\n<li>Zal de VS verder Europa intrekken??</li>\n<li>De Balkan oorlog lijkt ten einde: Roemenië is van de kaart geveegd</li>\n</ul>\n\n<p>Je kan hier mee doen, als je met andere Nederlanders mee wilt vechten: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io/</a></p>\n</div></div></div>",
+            "image": "https://i.redd.it/eofyl65jq7jg1.png",
+            "date_published": "2026-02-13T07:22:35.000Z",
+            "authors": [
+                {
+                    "name": "2free2be"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/eofyl65jq7jg1.png"
+                }
+            ]
+        },
+        {
+            "id": "ed312b6e9870a7bbbf592e6f6fa255d2",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r31qcz/game_update_politieke_partijen_wareraio/",
+            "title": "[Game Update] Politieke partijen [WarEra.io]!",
+            "content_text": "WarEra politieke partijen update!\n\nDe update voegt politieke partijen toe met een “ethics”-systeem waarbij ideologische keuzes directe bonussen geven als de president partijlid is. Partijen krijgen interne verkiezingen, een motiesysteem en kunnen acties starten zoals revoluties of burgeroorlogen! Zo krijgen partijen meer invloed op zowel de politieke als militaire dynamiek van het land. Check de volledige update hier!\n\nNederland heeft binnen een dag al 10 politieke partijen, een aantal grote maar ook flink wat splinter-partijen die mee gaan doen aan de verkiezingen over twee weken! \n\nDoe je nog niet mee? Join hier: https://app.warera.io!\n",
+            "content_html": "<div><img src=\"https://i.redd.it/asni6m01z3jg1.png\" style=\"width: 100%;\" /><div><div class=\"md\"><p><strong>WarEra politieke partijen update!</strong></p>\n\n<p>De update voegt politieke partijen toe met een “ethics”-systeem waarbij ideologische keuzes directe bonussen geven als de president partijlid is. Partijen krijgen interne verkiezingen, een motiesysteem en kunnen acties starten zoals revoluties of burgeroorlogen! Zo krijgen partijen meer invloed op zowel de politieke als militaire dynamiek van het land. Check de volledige update <a href=\"https://app.warera.io/article/698cf283b7035b9e9bf06c40\">hier</a>!</p>\n\n<p>Nederland heeft binnen een dag al 10 politieke partijen, een aantal grote maar ook flink wat splinter-partijen die mee gaan doen aan de verkiezingen over twee weken! </p>\n\n<p>Doe je nog niet mee? Join hier: <a href=\"https://app.warera.io?referrerId=692ee8d8d930f58a92c19dd3\">https://app.warera.io</a>!</p>\n</div></div></div>",
+            "image": "https://i.redd.it/asni6m01z3jg1.png",
+            "date_published": "2026-02-12T18:45:34.000Z",
+            "authors": [
+                {
+                    "name": "Gregardus"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/asni6m01z3jg1.png"
+                }
+            ]
+        },
+        {
+            "id": "54e6b95e88e981555f0219b957311b45",
+            "url": "https://www.reddit.com/r/WarEraNL/comments/1r2yxud/onze_tijd_komt_nog_wel/",
+            "title": "Onze tijd komt nog wel",
+            "content_text": "Iets met de beste stuurlui ofzo. \n\nOverigens is dit geen aanzet tot oorlog: mijn almaar groeiende aantal munten en factory-upgrades voorziet voorlopig ruimschoots in mijn dopaminebehoefte. Toch verlang ik stiekem alweer naar een volgende mooie oorlog.\n",
+            "content_html": "<div><img src=\"https://i.redd.it/y5y0aobyh3jg1.jpeg\" style=\"width: 100%;\" /><div><div class=\"md\"><p>Iets met de beste stuurlui ofzo. </p>\n\n<p>Overigens is dit geen aanzet tot oorlog: mijn almaar groeiende aantal munten en factory-upgrades voorziet voorlopig ruimschoots in mijn dopaminebehoefte. Toch verlang ik stiekem alweer naar een volgende mooie oorlog.</p>\n</div></div></div>",
+            "image": "https://i.redd.it/y5y0aobyh3jg1.jpeg",
+            "date_published": "2026-02-12T17:03:41.000Z",
+            "authors": [
+                {
+                    "name": "harmo2000"
+                }
+            ],
+            "attachments": [
+                {
+                    "url": "https://i.redd.it/y5y0aobyh3jg1.jpeg"
+                }
+            ]
+        }
+    ]
+}

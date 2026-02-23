@@ -1,40 +1,42 @@
 {
-  "test": false,
-  "roles": {
-    "bezoeker": 1468223393458425858,
-    "nederlander": 1456281070722093058,
-    "foreigner": 1467976572517482517,
-    "border_control": 1468230751274401843,
-    "minister_foreign_affairs": 1451180288515506258,
-    "president": 1401530996725383178,
-    "vice_president": 1401531414553428139,
-    "government": 1458527742646816892,
-    "ambassadeur": 1451180288515506258,
-    "commandant": 1458427087189835776
-  },
-  "channels": {
-    "welcome_message": 1401530718223335499,
-    "military_unit": 1467079894688206848,
-    "welcome_buttons": 1468223553156546613,
-    "verification": 1467976282968166706,
-    "logs": 1456287198780457134,
-    "production": 1474472809215299706,
-    "orders": 1467977826924761128,
-    "rules": 0,
-    "handleiding": 1457351757444419769,
-    "roles": 1456612515902390353,
-    "roles_claim": 1456612515902390353,
-    "vragen": 1456252976967581877,
-    "embassy_category": 1456259898349453433,
-    "articles": 1474728499242860645
-  },
-  "welcome_message": "# Welcome to the Official Nederland War Era Server!\n\nGreetings, traveler! You have arrived at the gates of Nederland.\n\nPlease select your status below to proceed with verification:",
-  "colors": {
-    "primary": "0xffb612",
-    "success": "0x57F287",
-    "error": "0xE02B2B",
-    "warning": "0xF59E42"
-  },
-  "ticket_counter": 222,
-  "api_base_url": "https://api2.warera.io/trpc"
+    "test": false,
+    "roles": {
+        "bezoeker": 1468223393458425858,
+        "nederlander": 1456281070722093058,
+        "foreigner": 1467976572517482517,
+        "border_control": 1468230751274401843,
+        "minister_foreign_affairs": 1451180288515506258,
+        "president": 1401530996725383178,
+        "vice_president": 1401531414553428139,
+        "government": 1458527742646816892,
+        "ambassadeur": 1451180288515506258,
+        "commandant": 1458427087189835776,
+        "belgian": 1475467520365428807
+    },
+    "channels": {
+        "welcome_message": 1401530718223335499,
+        "military_unit": 1467079894688206848,
+        "welcome_buttons": 1468223553156546613,
+        "verification": 1467976282968166706,
+        "logs": 1456287198780457134,
+        "production": 1474472809215299706,
+        "orders": 1467977826924761128,
+        "rules": 0,
+        "handleiding": 1457351757444419769,
+        "roles": 1456612515902390353,
+        "roles_claim": 1456612515902390353,
+        "vragen": 1456252976967581877,
+        "embassy_category": 1456259898349453433,
+        "reddit": 1474728411338641488,
+        "articles": 1474728499242860645
+    },
+    "welcome_message": "# Welcome to the Official Nederland War Era Server!\n\nGreetings, traveler! You have arrived at the gates of Nederland.\n\nPlease select your status below to proceed with verification:",
+    "colors": {
+        "primary": "0xffb612",
+        "success": "0x57F287",
+        "error": "0xE02B2B",
+        "warning": "0xF59E42"
+    },
+    "ticket_counter": 222,
+    "api_base_url": "https://api2.warera.io/trpc"
 }

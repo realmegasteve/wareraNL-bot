@@ -4,6 +4,7 @@ _api_keys.json
 logs/
 pyrightconfig.json
 database/database.db.backup.*
+data/reddit_state.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

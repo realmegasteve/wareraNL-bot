@@ -42,6 +42,16 @@ class WelcomeView(discord.ui.View):
         await create_verification_channel(interaction, "citizen")
 
     @discord.ui.button(
+        label="Belgian",
+        style=discord.ButtonStyle.success,
+        custom_id="welcome_belgian",
+        emoji="🇧🇪"
+    )
+    async def belgian_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle Belgian verification request."""
+        await create_verification_channel(interaction, "belgian")
+
+    @discord.ui.button(
         label="Foreigner",
         style=discord.ButtonStyle.primary,
         custom_id="welcome_foreigner",
@@ -62,9 +72,6 @@ class WelcomeView(discord.ui.View):
         await create_verification_channel(interaction, "embassy")
 
 
-# Add a global dictionary to track open tickets
-open_tickets = {}
-
 async def create_verification_channel(interaction: discord.Interaction, request_type: str) -> None:
     """
     Create a private verification ticket channel for the user.
@@ -81,10 +88,30 @@ async def create_verification_channel(interaction: discord.Interaction, request_
     user = interaction.user
     guild = interaction.guild
     config = getattr(interaction.client, "config", {}) or {}
+    logger.info(f"Creating verification channel for {user.name} ({request_type}) in guild {guild.name}")
 
-    # Check if the user already has an open ticket
-    if user.id in open_tickets:
-        existing_channel = open_tickets[user.id]
+
+
+    # Also check actual existing channels (covers bot restarts and manual channel cleanup)
+    channels_cfg = config.get("channels", {})
+    verification_cat_id = channels_cfg.get("verification")
+    verification_category = guild.get_channel(verification_cat_id) if verification_cat_id else None
+    channels_to_check = verification_category.channels if verification_category else guild.text_channels
+
+    username_slug = user.name.lower().replace(" ", "-")
+    known_prefixes = ("citizen-", "belg-", "foreigner-", "embassy-")
+    existing_channel = None
+    for channel in channels_to_check:
+        topic = channel.topic or ""
+        name = channel.name.lower()
+        # Prefer exact user-id match in topic; fallback to username pattern in channel name
+        if f"User ID: {user.id}" in topic or (
+            name.endswith(f"-{username_slug}") and name.startswith(known_prefixes)
+        ):
+            existing_channel = channel
+            break
+
+    if existing_channel:
         await interaction.response.send_message(
             f"Je hebt al een open ticket: {existing_channel.mention}. Los dit eerst op voordat je een nieuw ticket aanmaakt.",
             ephemeral=True,
@@ -111,6 +138,11 @@ async def create_verification_channel(interaction: discord.Interaction, request_
         role_ids = [roles_cfg.get("border_control")]
         embed_color = discord.Color.green()
         request_title = "Verificatieverzoek Nederlanderschap"
+    elif request_type == "belgian":
+        channel_name = f"belg-{ticket_id}-{user.name}"
+        role_ids = [roles_cfg.get("border_control")]
+        embed_color = discord.Color.green()
+        request_title = "Belgian Citizenship Verification Request"
     elif request_type == "foreigner":
         channel_name = f"foreigner-{ticket_id}-{user.name}"
         role_ids = [roles_cfg.get("border_control")]
@@ -132,7 +164,7 @@ async def create_verification_channel(interaction: discord.Interaction, request_
 
     # Get the category to create the channel in (if configured)
     category = None
-    verification_cat = config.get("channels", {}).get("verification")
+    verification_cat = channels_cfg.get("verification")
     if verification_cat:
         category = guild.get_channel(verification_cat)
 
@@ -195,8 +227,6 @@ async def create_verification_channel(interaction: discord.Interaction, request_
         await interaction.response.send_message(error_msg, ephemeral=True)
         return
 
-    # Track the open ticket
-    open_tickets[user.id] = channel
 
     # Build list of role mentions to ping
     role_mentions = []
@@ -229,6 +259,12 @@ async def create_verification_channel(interaction: discord.Interaction, request_
         instructions_embed = discord.Embed(
             title=f"Verificatie Uitvoeren",
             description=f"Beste {user.mention},\n\nBedankt voor het aanvragen van de Nederlandse nationaliteit. Voor verificatie vragen we je om een screenshot van je WarEra profiel te sturen.\n\nZodra een moderator je aanvraag heeft beoordeeld, ontvang je een bericht in dit kanaal.",
+            color=embed_color
+        )
+    elif request_type == "belgian":
+        instructions_embed = discord.Embed(
+            title=f"Verification Instructions",
+            description=f"Hello {user.mention},\n\nThank you for requesting Belgian citizenship. For verification, please send a screenshot of your WarEra profile.\n\nOnce a moderator has reviewed your request, you will receive a message in this channel.",
             color=embed_color
         )
     elif request_type == "foreigner":
@@ -428,7 +464,7 @@ class Welcome(commands.Cog, name="welcome"):
         channel = interaction.channel
 
         # Verify this is a ticket channel
-        if not channel.name.startswith(("citizen-", "foreigner-", "embassy-")):
+        if not channel.name.startswith(("citizen-", "foreigner-", "embassy-", "belg-")):
             await interaction.response.send_message(
                 "This command can only be used in verification channels.",
                 ephemeral=True
@@ -484,6 +520,8 @@ class Welcome(commands.Cog, name="welcome"):
 
         if request_type == "citizen":
             role_to_give = interaction.guild.get_role(self.config["roles"]["nederlander"])
+        elif request_type == "belgian":
+            role_to_give = interaction.guild.get_role(self.config["roles"]["belgian"])
         elif request_type == "foreigner":
             role_to_give = interaction.guild.get_role(self.config["roles"]["foreigner"])
 
@@ -615,9 +653,6 @@ class Welcome(commands.Cog, name="welcome"):
         except (discord.NotFound, discord.Forbidden) as e:
             self.bot.logger.error(f"Could not delete channel: {e}")
 
-        # remove ticket from tracking
-        if member.id in open_tickets:
-            del open_tickets[member.id]
 
     @app_commands.command(name="deny", description="Wijs een verificatieverzoek af")
     @app_commands.describe(reason="Interne reden voor afwijzing (niet zichtbaar voor de gebruiker)")
@@ -629,7 +664,7 @@ class Welcome(commands.Cog, name="welcome"):
         channel = interaction.channel
 
         # Verify this is a ticket channel
-        if not channel.name.startswith(("citizen-", "foreigner-", "embassy-")):
+        if not channel.name.startswith(("citizen-", "foreigner-", "embassy-", "belg-")):
             await interaction.response.send_message(
                 "Dit commando kan alleen worden gebruikt in verificatiekanalen.",
                 ephemeral=True
@@ -732,9 +767,6 @@ class Welcome(commands.Cog, name="welcome"):
             self.bot.logger.error(f"Could not delete channel: {e}")
 
         
-        # remove ticket from tracking
-        if member.id in open_tickets:
-            del open_tickets[member.id]
 
     @app_commands.command(name="embassyapprove", description="Keur een ambassadeverzoek goed")
     @app_commands.describe(country="Land van het ambassadeverzoek")
@@ -949,11 +981,6 @@ class Welcome(commands.Cog, name="welcome"):
                 await interaction.channel.delete(reason=f"Embassy request approved by {interaction.user.name}")
             except (discord.NotFound, discord.Forbidden) as e:
                 self.bot.logger.error(f"Could not delete channel: {e}")
-
-            
-            # remove ticket from tracking
-            if member.id in open_tickets:
-                del open_tickets[member.id]
 
 
 
