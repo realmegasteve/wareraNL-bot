@@ -338,7 +338,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 if channel:
                     try:
                         await channel.send(
-                            f"🏭 **{item}** permanent leader: **{country_name}** ({bonus}%) — was {old_desc}"
+                            f"🏭 **{item}** nieuwe langetermijnleider: **{country_name}** ({bonus}%) — was {old_desc}"
                         )
                     except Exception:
                         self.bot.logger.exception("Failed sending permanent leader update for %s", item)
@@ -386,8 +386,8 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 if channel:
                     try:
                         await channel.send(
-                            f"⚡ **{item}** new short-term leader: **{region_name}** — "
-                            f"**{bonus}%** total"
+                            f"⚡ **{item}** nieuwe kortetermijnleider: **{region_name}** — "
+                            f"**{bonus}%** totaal"
                             + (f" ⏳ {duration}" if duration else "")
                         )
                     except Exception:
@@ -416,7 +416,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             end = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
             delta = end - datetime.now(timezone.utc)
             if delta.total_seconds() <= 0:
-                return "expired"
+                return "verlopen"
             hours, remainder = divmod(int(delta.total_seconds()), 3600)
             minutes = remainder // 60
             if hours >= 24:
@@ -571,11 +571,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                     # new/prev are like "Turkey (62.75%)" or "Bahamas (73%)"
                     if is_deposit:
                         lines.append(
-                            f"⚡ Deposit **{base}** new leader: **{new}** ← was {prev}"
+                            f"⚡ Depot **{base}** nieuwe kortetermijnleider: **{new}** ← was {prev}"
                         )
                     else:
                         lines.append(
-                            f"🏭 Specialization **{base}** new leader: **{new}** ← was {prev}"
+                            f"🏭 Specialisatie **{base}** nieuwe langetermijnleider: **{new}** ← was {prev}"
                         )
                 await channel.send(f"Productiepeiling voltooid — {len(changes)} wijziging(en):\n" + "\n".join(lines))
             except Exception:
