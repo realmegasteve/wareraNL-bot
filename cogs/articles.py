@@ -166,7 +166,7 @@ class ArticleScanner(commands.Cog, name="article_scanner"):
         try:
             resp = await self._client.get(
                 "/article.getArticlesPaginated",
-                params={"input": json.dumps({"type": "last", "languages": ["nl"], "limit": 20})},
+                params={"input": json.dumps({"type": "last", "limit": 20})},  # no language filter — filter by author citizenship instead
             )
         except Exception as exc:
             logger.warning("Failed to fetch articles: %s", exc)
@@ -199,16 +199,23 @@ class ArticleScanner(commands.Cog, name="article_scanner"):
                         pass  # no permission to read history — assume not empty
 
             if channel_empty and items:
-                # Post N newest articles oldest-first so the most recent ends up at the bottom.
-                # Configurable via 'articles_startup_count' (default: 3).
+                # Post up to N Dutch articles on empty startup.
+                # Scan all fetched items (newest-first) until we've successfully
+                # posted startup_count articles — skipping non-Dutch authors.
                 startup_count = self.config.get("articles_startup_count", 3)
-                to_post = items[:startup_count]
-                for newest in reversed(to_post):
-                    aid = str(newest.get("id") or newest.get("_id") or "")
-                    if aid:
-                        logger.info("Article poll: channel empty on startup — posting article %s", aid)
-                        await self._post_article(newest, aid, channel_id)
-                        await asyncio.sleep(1)
+                posted_count = 0
+                for candidate in items:
+                    if posted_count >= startup_count:
+                        break
+                    aid = str(candidate.get("id") or candidate.get("_id") or "")
+                    if not aid:
+                        continue
+                    logger.debug("Article poll: startup — trying article %s", aid)
+                    success = await self._post_article(candidate, aid, channel_id)
+                    if success:
+                        posted_count += 1
+                    await asyncio.sleep(1)
+                logger.info("Article poll: startup scan complete — posted %d article(s)", posted_count)
 
             # Mark all fetched articles as seen to avoid re-posting on next tick.
             for article in items:
@@ -232,8 +239,12 @@ class ArticleScanner(commands.Cog, name="article_scanner"):
             # Small delay to avoid overwhelming Discord if multiple new articles arrive at once
             await asyncio.sleep(1)
 
-    async def _post_article(self, lite: dict, article_id: str, channel_id: int) -> None:
-        """Fetch full article and post an embed to the articles channel."""
+    async def _post_article(self, lite: dict, article_id: str, channel_id: int) -> bool:
+        """Fetch full article and post an embed to the articles channel.
+
+        Returns True if the article was posted, False if it was skipped
+        (e.g. author is not a Dutch citizen).
+        """
         # Try to get full article content
         full: dict = {}
         try:
@@ -242,9 +253,6 @@ class ArticleScanner(commands.Cog, name="article_scanner"):
                 params={"input": json.dumps({"articleId": article_id})},
             )
             full = _unwrap(resp)
-            if isinstance(full, dict):
-                logger.info("getArticleById keys for %s: %s", article_id, list(full.keys()))
-                logger.info("getArticleById stats for %s: %s", article_id, full.get("stats"))
         except Exception as exc:
             logger.warning("Could not fetch full article %s: %s", article_id, exc)
             full = lite  # fall back to lite data
@@ -268,6 +276,17 @@ class ArticleScanner(commands.Cog, name="article_scanner"):
                 )
                 user_data = _unwrap(user_resp)
                 if isinstance(user_data, dict):
+                    # Country check — only post articles by Dutch citizens
+                    nl_country_id = self.config.get("nl_country_id")
+                    if nl_country_id:
+                        author_country = user_data.get("country", "")
+                        if author_country != nl_country_id:
+                            logger.debug(
+                                "Skipping article %s — author %s is from country %s (not NL)",
+                                article_id, author_id, author_country,
+                            )
+                            return False
+
                     for key in ("name", "username", "displayName", "nick"):
                         val = user_data.get(key)
                         if isinstance(val, str) and val:
@@ -356,6 +375,8 @@ class ArticleScanner(commands.Cog, name="article_scanner"):
                 article_id, channel_id,
             )
 
+        return posted
+
     # ------------------------------------------------------------------ #
     # Test command                                                         #
     # ------------------------------------------------------------------ #
@@ -384,7 +405,7 @@ class ArticleScanner(commands.Cog, name="article_scanner"):
         try:
             resp = await self._client.get(
                 "/article.getArticlesPaginated",
-                params={"input": json.dumps({"type": "last", "languages": ["nl"], "limit": 1})},
+                params={"input": json.dumps({"type": "last", "limit": 1})},  # no language filter
             )
         except Exception as exc:
             await interaction.followup.send(f"API-fout: {exc}", ephemeral=True)

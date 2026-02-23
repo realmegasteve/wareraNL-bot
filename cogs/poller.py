@@ -710,7 +710,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         if best_l_idx is not None:
             bl_item, bl = long_rows[best_l_idx]
             best_embed.add_field(
-                name="🏆 Beste langetermijn",
+                name="🏆 Hoogste langetermijn",
                 value=f"**{bl_item}** — {bl.get('country_name')} **{bl.get('production_bonus')}%**",
                 inline=False,
             )
@@ -719,7 +719,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             rl = bs.get("region_name") or bs.get("region_id") or "?"
             dur = self._format_duration(bs.get("deposit_end_at") or "")
             best_embed.add_field(
-                name="⚡ Beste kortetermijn",
+                name="⚡ Hoogste kortetermijn",
                 value=(
                     f"**{bs_item}** — {rl} **{bs.get('bonus')}%**"
                     + (f"  ⏳ {dur}" if dur else "")
@@ -756,13 +756,13 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             return
 
         colour = self._embed_colour()
-        embed = discord.Embed(title="Beste Productiebonussen", colour=colour)
+        embed = discord.Embed(title="Hoogste Productiebonussen", colour=colour)
 
         if tops:
             bl = max(tops, key=lambda t: float(t.get("production_bonus") or 0))
             bd = self._long_bd(bl)
             embed.add_field(
-                name="🏆 Beste langetermijn",
+                name="🏆 Hoogste langetermijn",
                 value=(
                     f"**{bl.get('item')}** — {bl.get('country_name')} **{bl.get('production_bonus')}%**"
                     + (f"\n*{bd}*" if bd else "")
@@ -775,7 +775,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             dur = self._format_duration(bs.get("deposit_end_at") or "")
             bd = self._short_bd(bs)
             embed.add_field(
-                name="⚡ Beste kortetermijn",
+                name="⚡ Hoogste kortetermijn",
                 value=(
                     f"**{bs.get('item')}** — {rl} **{bs.get('bonus')}%**"
                     + (f"  ⏳ {dur}" if dur else "")
