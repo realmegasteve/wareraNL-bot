@@ -163,22 +163,24 @@ class RoleToggleView(discord.ui.View):
 class Roles(commands.Cog, name="roles"):
     def __init__(self, bot) -> None:
         self.bot = bot
-        self.template = load_roles_template(mu_roles_path(getattr(bot, "testing", False)))
-        # Register persistent views for templates so buttons keep working after restarts
-        if self.template.get("embeds"):
-            for embed_data in self.template["embeds"]:
+        self.template = load_roles_template()
+        # Register persistent views for templates so buttons keep working after restarts.
+        # Helper registers both top-level `buttons` and per-embed `embeds` entries.
+        def _register_template(tmpl: dict, exclusive: bool = True) -> None:
+            if not tmpl:
+                return
+            if tmpl.get("buttons"):
+                self.bot.add_view(RoleToggleView(tmpl["buttons"], exclusive=exclusive))
+            for embed_data in tmpl.get("embeds", []):
                 if embed_data.get("buttons"):
-                    self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=True))
-        if self.template.get("buttons"):
-            self.bot.add_view(RoleToggleView(self.template["buttons"], exclusive=True))
+                    self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=exclusive))
+
+        _register_template(self.template, exclusive=True)
 
         # Also load and register the general roles template (templates/roles.json)
         try:
             general_template = load_roles_template(f"{TEMPLATES_PATH}/roles.json")
-            if general_template.get("buttons"):
-                for embed_data in general_template["embeds"]:
-                    if embed_data.get("buttons"):
-                        self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=True))
+            _register_template(general_template, exclusive=True)
         except Exception:
             # Fail quietly; commands will still load and can post the view manually
             pass
