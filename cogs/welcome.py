@@ -115,7 +115,7 @@ async def create_verification_channel(interaction: discord.Interaction, request_
         channel_name = f"foreigner-{ticket_id}-{user.name}"
         role_ids = [roles_cfg.get("border_control")]
         embed_color = discord.Color.blue()
-        request_title = "Verificatieverzoek Buitenlander"
+        request_title = "Foreigner Verification Request"
     else:  # embassy
         channel_name = f"embassy-{ticket_id}-{user.name}"
         # Embassy requests notify multiple high-level roles
@@ -125,7 +125,7 @@ async def create_verification_channel(interaction: discord.Interaction, request_
             roles_cfg.get("vice_president"),
         ]
         embed_color = discord.Color.red()
-        request_title = "Noodaanvraag Ambassade"
+        request_title = "Emergency Embassy Request"
 
     # Sanitize channel name (Discord requires lowercase, no spaces, max 100 chars)
     channel_name = channel_name.lower().replace(" ", "-")[:100]
@@ -305,7 +305,7 @@ class Welcome(commands.Cog, name="welcome"):
                         return
 
                     # Send the ping
-                    await channel.send(f"{role.mention} gebruik een van de bovenstaande knoppen om je rol te claimen.")
+                    await channel.send(f"{role.mention} please use one of the above buttons to claim your role.")
                     self.bot.logger.info(f"Sent daily bezoeker ping in {guild.name}")
                     return
 
