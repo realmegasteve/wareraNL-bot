@@ -42,6 +42,16 @@ class WelcomeView(discord.ui.View):
         await create_verification_channel(interaction, "citizen")
 
     @discord.ui.button(
+        label="Belgian",
+        style=discord.ButtonStyle.success,
+        custom_id="welcome_belgian",
+        emoji="🇧🇪"
+    )
+    async def belgian_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle Belgian verification request."""
+        await create_verification_channel(interaction, "belgian")
+
+    @discord.ui.button(
         label="Foreigner",
         style=discord.ButtonStyle.primary,
         custom_id="welcome_foreigner",
@@ -111,6 +121,11 @@ async def create_verification_channel(interaction: discord.Interaction, request_
         role_ids = [roles_cfg.get("border_control")]
         embed_color = discord.Color.green()
         request_title = "Verificatieverzoek Nederlanderschap"
+    if request_type == "belgian":
+        channel_name = f"belg-{ticket_id}-{user.name}"
+        role_ids = [roles_cfg.get("border_control")]
+        embed_color = discord.Color.green()
+        request_title = "Belgian Citizenship Verification Request"
     elif request_type == "foreigner":
         channel_name = f"foreigner-{ticket_id}-{user.name}"
         role_ids = [roles_cfg.get("border_control")]
@@ -229,6 +244,12 @@ async def create_verification_channel(interaction: discord.Interaction, request_
         instructions_embed = discord.Embed(
             title=f"Verificatie Uitvoeren",
             description=f"Beste {user.mention},\n\nBedankt voor het aanvragen van de Nederlandse nationaliteit. Voor verificatie vragen we je om een screenshot van je WarEra profiel te sturen.\n\nZodra een moderator je aanvraag heeft beoordeeld, ontvang je een bericht in dit kanaal.",
+            color=embed_color
+        )
+    elif request_type == "belgian":
+        instructions_embed = discord.Embed(
+            title=f"Verification Instructions",
+            description=f"Hello {user.mention},\n\nThank you for requesting Belgian citizenship. For verification, please send a screenshot of your WarEra profile.\n\nOnce a moderator has reviewed your request, you will receive a message in this channel.",
             color=embed_color
         )
     elif request_type == "foreigner":
@@ -428,7 +449,7 @@ class Welcome(commands.Cog, name="welcome"):
         channel = interaction.channel
 
         # Verify this is a ticket channel
-        if not channel.name.startswith(("citizen-", "foreigner-", "embassy-")):
+        if not channel.name.startswith(("citizen-", "foreigner-", "embassy-", "belg-")):
             await interaction.response.send_message(
                 "This command can only be used in verification channels.",
                 ephemeral=True
@@ -484,6 +505,8 @@ class Welcome(commands.Cog, name="welcome"):
 
         if request_type == "citizen":
             role_to_give = interaction.guild.get_role(self.config["roles"]["nederlander"])
+        elif request_type == "belgian":
+            role_to_give = interaction.guild.get_role(self.config["roles"]["belgian"])
         elif request_type == "foreigner":
             role_to_give = interaction.guild.get_role(self.config["roles"]["foreigner"])
 

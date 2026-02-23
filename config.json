@@ -10,7 +10,8 @@
         "vice_president": 1401531414553428139,
         "government": 1458527742646816892,
         "ambassadeur": 1451180288515506258,
-        "commandant": 1458427087189835776
+        "commandant": 1458427087189835776,
+        "belgian": 1475467520365428807
     },
     "channels": {
         "welcome_message": 1401530718223335499,
@@ -24,7 +25,8 @@
         "handleiding": 1457351757444419769,
         "roles_claim": 1456612515902390353,
         "vragen": 1456252976967581877,
-        "embassy_category": 1456259898349453433
+        "embassy_category": 1456259898349453433,
+        "reddit": 1474728411338641488
     },
     "welcome_message": "# Welcome to the Official Nederland War Era Server!\n\nGreetings, traveler! You have arrived at the gates of Nederland.\n\nPlease select your status below to proceed with verification:",
     "colors": {
