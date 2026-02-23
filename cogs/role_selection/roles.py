@@ -24,6 +24,13 @@ def mu_roles_path(testing: bool = False) -> str:
     return f"{TEMPLATES_PATH}/mu_roles.json"
 
 
+def general_roles_path(testing: bool = False) -> str:
+    """Return the correct general roles JSON path for the current mode."""
+    if testing:
+        return f"{TEMPLATES_PATH}/roles.testing.json"
+    return f"{TEMPLATES_PATH}/roles.json"
+
+
 def load_roles_template(path: str = f"{TEMPLATES_PATH}/mu_roles.json") -> dict:
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -163,24 +170,25 @@ class RoleToggleView(discord.ui.View):
 class Roles(commands.Cog, name="roles"):
     def __init__(self, bot) -> None:
         self.bot = bot
-        self.template = load_roles_template()
-        # Register persistent views for templates so buttons keep working after restarts.
-        # Helper registers both top-level `buttons` and per-embed `embeds` entries.
-        def _register_template(tmpl: dict, exclusive: bool = True) -> None:
-            if not tmpl:
-                return
-            if tmpl.get("buttons"):
-                self.bot.add_view(RoleToggleView(tmpl["buttons"], exclusive=exclusive))
-            for embed_data in tmpl.get("embeds", []):
+        self.template = load_roles_template(mu_roles_path(getattr(bot, "testing", False)))
+        # Register persistent views for templates so buttons keep working after restarts
+        if self.template.get("embeds"):
+            for embed_data in self.template["embeds"]:
                 if embed_data.get("buttons"):
-                    self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=exclusive))
+                    self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=True))
+        if self.template.get("buttons"):
+            self.bot.add_view(RoleToggleView(self.template["buttons"], exclusive=True))
 
-        _register_template(self.template, exclusive=True)
-
-        # Also load and register the general roles template (templates/roles.json)
+        # Also load and register the general roles template
+        # General roles are NOT exclusive — users can hold multiple simultaneously.
         try:
-            general_template = load_roles_template(f"{TEMPLATES_PATH}/roles.json")
-            _register_template(general_template, exclusive=True)
+            general_template = load_roles_template(general_roles_path(getattr(bot, "testing", False)))
+            if general_template.get("embeds"):
+                for embed_data in general_template["embeds"]:
+                    if embed_data.get("buttons"):
+                        self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=False))
+            elif general_template.get("buttons"):
+                self.bot.add_view(RoleToggleView(general_template["buttons"], exclusive=False))
         except Exception:
             # Fail quietly; commands will still load and can post the view manually
             pass
@@ -206,28 +214,76 @@ class Roles(commands.Cog, name="roles"):
         color = int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
         await post_or_edit_buttons(target_channel, self.template, path, color)
 
-    @app_commands.command(name="generalroles", description="Post the general role buttons.")
-    @app_commands.default_permissions(manage_roles=True)
+    @app_commands.command(name="generalroles", description="Post de rol-knoppen in het rollen-kanaal.")
+    @has_privileged_role()
     async def generalroles(self, interaction: discord.Interaction) -> None:
-        self.template = load_roles_template(f"{TEMPLATES_PATH}/roles.json")
-        embeds = self.template.get("embeds", [])
+        await interaction.response.defer(ephemeral=True)
+
+        testing = getattr(self.bot, "testing", False)
+        path = general_roles_path(testing)
+        template = load_roles_template(path)
+        embeds = template.get("embeds", [])
+
+        if not embeds:
+            await interaction.followup.send("❌ Geen embeds geconfigureerd.", ephemeral=True)
+            return
+
+        # Resolve target channel from config
+        roles_ch_id = self.bot.config.get("channels", {}).get("roles")
+        target_channel = (interaction.guild.get_channel(roles_ch_id) if roles_ch_id else None) or interaction.channel
+
+        # Purge previous bot messages in the roles channel
+        try:
+            await target_channel.purge(limit=50, check=lambda m: m.author == self.bot.user)
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        color = int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
+        template_dirty = False
+
         for embed_data in embeds:
             buttons = embed_data.get("buttons", [])
-
             if not buttons:
-                await interaction.response.send_message("No buttons configured in templates/roles.json.", ephemeral=True)
-                return
+                continue
+
+            # Ensure every role exists in Discord; create it if missing or role_id is 0
+            for btn in buttons:
+                role_id = int(btn.get("role_id", 0))
+                role = interaction.guild.get_role(role_id) if role_id else None
+                if role is None:
+                    # Try to find by name first, then create
+                    role = discord.utils.get(interaction.guild.roles, name=btn["label"])
+                    if role is None:
+                        try:
+                            role = await interaction.guild.create_role(
+                                name=btn["label"],
+                                mentionable=True,
+                                reason="Automatisch aangemaakt door /generalroles",
+                            )
+                        except Exception as e:
+                            self.bot.logger.error("Failed to create role %s: %s", btn["label"], e)
+                            continue
+                    btn["role_id"] = role.id
+                    template_dirty = True
 
             embed = discord.Embed(
                 title=embed_data.get("title", "Kies je rollen"),
                 description=embed_data.get("description", "Klik op een knop om rollen te toggelen."),
-                color=int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
+                color=color,
             )
+            await target_channel.send(embed=embed, view=RoleToggleView(buttons, exclusive=False))
 
-            # Send embed to channel
-            await interaction.channel.send(embed=embed, view=RoleToggleView(buttons))
-        # Send ephemeral confirmation to user
-        await interaction.response.send_message("✅ Posted role buttons to the channel.", ephemeral=True)
+        # Persist any newly-created role IDs back to the JSON
+        if template_dirty:
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(template, f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                self.bot.logger.error("Failed to save general roles template: %s", e)
+
+        await interaction.followup.send(
+            f"✅ Rol-knoppen gepost in {target_channel.mention}.", ephemeral=True
+        )
             
 
     @app_commands.command(name="muwachtlijst", description="Tel het aantal mensen op de wachtlijst voor MU's.")
@@ -309,6 +365,8 @@ class Roles(commands.Cog, name="roles"):
         path = mu_roles_path(getattr(self.bot, "testing", False))
         data = load_roles_template(path)
 
+        _PINNED_LABELS = {"Overige MU", "Wachtlijst"}
+
         existing_buttons = data.get("buttons", [])
         secondary_role_id = existing_buttons[0].get("secondary_role_id") if existing_buttons else None
 
@@ -318,8 +376,13 @@ class Roles(commands.Cog, name="roles"):
             )
             return
 
+        # Split pinned (Overige MU / Wachtlijst) from normal buttons so the
+        # new MU is always inserted before them.
+        normal_buttons = [b for b in existing_buttons if b.get("label") not in _PINNED_LABELS]
+        pinned_buttons = [b for b in existing_buttons if b.get("label") in _PINNED_LABELS]
+
         if row is None:
-            row = len(existing_buttons) // 5
+            row = len(normal_buttons) // 5
 
         new_button: dict = {
             "label": label,
@@ -330,7 +393,7 @@ class Roles(commands.Cog, name="roles"):
         if secondary_role_id is not None:
             new_button["secondary_role_id"] = secondary_role_id
 
-        data.setdefault("buttons", []).append(new_button)
+        data["buttons"] = normal_buttons + [new_button] + pinned_buttons
 
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -481,6 +544,24 @@ class Roles(commands.Cog, name="roles"):
             f"✅ **{label}** verwijderd uit de MU-selector.{deleted_role_msg}",
             ephemeral=True,
         )
+
+    @app_commands.command(name="verwijderrol", description="Verwijder een Discord-rol van de server op naam.")
+    @app_commands.describe(rol="De rol om te verwijderen")
+    @has_privileged_role()
+    async def verwijderrol(self, interaction: discord.Interaction, rol: discord.Role) -> None:
+        """Verwijder een Discord-rol van de server."""
+        try:
+            naam = rol.name
+            await rol.delete(reason=f"Verwijderd door /verwijderrol van {interaction.user}")
+            await interaction.response.send_message(
+                f"✅ Rol **{naam}** succesvol verwijderd.", ephemeral=True
+            )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "❌ Ik heb geen toestemming om deze rol te verwijderen.", ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Verwijderen mislukt: {e}", ephemeral=True)
 
     @app_commands.command(name="ambassadeurs", description="Geef de ambassadeur rol.")
     @app_commands.describe(user="De gebruiker aan wie je de ambassadeur rol wilt geven.")

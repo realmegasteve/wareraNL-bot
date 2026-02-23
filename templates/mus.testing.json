@@ -21,6 +21,11 @@
             "thumbnail": "https://media.warera.io/avatars/mu/mu-6970dd1ebea7a2698be2e84e-1770831355728-6mctkthl.png"
         },
         {
+            "title": "Van Speijk Eskader",
+            "description": "[**Standaard MU**](https://app.warera.io/mu/698f253efffb3268e9276ac1)",
+            "thumbnail": "https://i.imgur.com/0p5j6p1.png"
+        },
+        {
             "title": "De Nederlandse Bank",
             "description": "[**Eco MU**](https://app.warera.io/mu/697de1e370af1f7f8aa169ea)",
             "thumbnail": "https://media.warera.io/avatars/mu/mu-697de1e370af1f7f8aa169ea-1769857667228-r8i3fnrp.png"
@@ -29,39 +34,16 @@
             "title": "Regiment Huzaren",
             "description": "[**Standaard MU**](https://app.warera.io/mu/6980b01819decffdc7848ef9)",
             "thumbnail": "https://media.warera.io/avatars/mu/mu-6980b01819decffdc7848ef9-1770821860524-yd1m6m7w.png"
-        },
-        {
-            "title": "Luchtmobiele Brigade",
-            "description": "[**Standaard MU**](https://app.warera.io/mu/69843f617cf831a523014e15)",
-            "thumbnail": "https://media.warera.io/avatars/mu/mu-69843f617cf831a523014e15-1770476600780-03onmn2a.png"
-        },
-        {
-            "title": "Regiment van Oranje",
-            "description": "[**Standaard MU**](https://app.warera.io/mu/69848b1d7922e416bbcca4e9)",
-            "thumbnail": "https://media.warera.io/avatars/mu/mu-69848b1d7922e416bbcca4e9-1770821085430-y1gtahvp.png"
-        },
-        {
-            "title": "Van Speijk Eskader",
-            "description": "[**Standaard MU**](https://app.warera.io/mu/698f253efffb3268e9276ac1)",
-            "thumbnail": "https://i.imgur.com/0p5j6p1.png"
-        },
-        {
-            "title": "Oranje Huurlingen",
-            "description": "[**Standaard MU**](https://app.warera.io/mu/69906c5a8b9151ad2ba50435)",
-            "thumbnail": "https://media.warera.io/avatars/mu/mu-69906c5a8b9151ad2ba50435-1771094271985-uomonkkc.png"
         }
     ],
     "posted_message_ids": [
-        1475282845864821002,
-        1475282846552948768,
-        1475282848704499886,
-        1475282850713698304,
-        1475282852261396694,
-        1475282853750116524,
-        1475282873279058072,
-        1475282873996153014,
-        1475282875657224242,
-        1475282876898607299,
-        1475282878391783444
+        1475475531125358624,
+        1475475532391911424,
+        1475475533344149545,
+        1475475534350651485,
+        1475475535537635411,
+        1475475537693773970,
+        1475475557151146155,
+        1475475558337871973
     ]
 }

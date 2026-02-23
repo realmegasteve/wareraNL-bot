@@ -30,7 +30,7 @@ class MUs(GenerateEmbeds, name="mus"):
     
     @commands.hybrid_command(
         name="mulijst",
-        description="Post de MU lijst in het huidige kanaal.",
+        description="Post de MU lijst in het MU-kanaal.",
     )
     @has_privileged_role()
     async def mulijst(self, context: Context) -> None:
@@ -95,7 +95,13 @@ class MUs(GenerateEmbeds, name="mus"):
         """Delete previously tracked messages, post fresh ones, save new IDs to JSON."""
         path = mus_path(getattr(self.bot, "testing", False))
 
-        # Delete old messages if we have IDs
+        # Bulk-delete recent bot messages (≤14 days) — covers the common case
+        try:
+            await channel.purge(limit=100, check=lambda m: m.author == self.bot.user)
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        # Also individually delete any tracked IDs that may be older than 14 days
         old_ids: list[int] = self.json_data.get("posted_message_ids", [])
         for msg_id in old_ids:
             try:
@@ -123,27 +129,118 @@ class MUs(GenerateEmbeds, name="mus"):
         msg = await channel.send(embed=explanation)
         new_ids.append(msg.id)
 
-        for embed_data in self.json_data.get("embeds", []):
+        _PINNED_LABELS = {"Overige MU", "Wachtlijst"}
+        _TYPE_ORDER = {"Elite": 0, "Eco": 1, "Standaard": 2}
+
+        def _mu_type(description: str) -> int:
+            """Return sort key from embed description like '[**Elite MU**](...)'."""
+            m = re.search(r'\*\*(Elite|Eco|Standaard) MU\*\*', description or "")
+            return _TYPE_ORDER.get(m.group(1), 9999) if m else 9999
+
+        # Sort embeds: Elite → Eco → Standaard
+        embeds_sorted = sorted(
+            self.json_data.get("embeds", []),
+            key=lambda e: _mu_type(e.get("description", "")),
+        )
+
+        # Use exact embed position as button sort key so button order = embed order
+        embed_position: dict[str, int] = {e["title"]: i for i, e in enumerate(embeds_sorted)}
+
+        # Colors per MU type
+        _TYPE_COLORS: dict[str, discord.Color] = {
+            "Elite":     discord.Color.orange(),                # #E67E22
+            "Eco":       discord.Color.from_rgb(46, 204, 113), # emerald green
+            "Standaard": discord.Color.from_rgb(52, 152, 219), # steel blue
+        }
+
+        def _mu_type_str(description: str) -> str | None:
+            """Return the type string (Elite/Eco/Standaard) from an embed description."""
+            m = re.search(r'\*\*(Elite|Eco|Standaard) MU\*\*', description or "")
+            return m.group(1) if m else None
+
+        # One embed per MU (preserves thumbnail), coloured by type, sorted Elite → Eco → Standaard
+        for embed_data in embeds_sorted:
+            mu_type_str = _mu_type_str(embed_data.get("description", ""))
+            color = _TYPE_COLORS.get(mu_type_str, discord.Color.greyple())
+            embed = discord.Embed(
+                title=embed_data.get("title", ""),
+                description=embed_data.get("description", ""),
+                color=color,
+            )
+            if "thumbnail" in embed_data:
+                embed.set_thumbnail(url=embed_data["thumbnail"])
             try:
-                msg = await channel.send(embed=self.create_embed_from_data(embed_data))
+                msg = await channel.send(embed=embed)
                 new_ids.append(msg.id)
             except Exception as e:
-                self.bot.logger.error(f"Error sending embed: {e}")
+                self.bot.logger.error(f"Error sending embed for {embed_data.get('title')}: {e}")
 
-        # Post role-selection embed with buttons — always send new so it ends up at the bottom
+        # Post role-selection embed with buttons — order mirrors embeds exactly,
+        # pinned buttons (Overige MU / Wachtlijst) stay last, row numbers recalculated
         try:
             roles_path = mu_roles_path(getattr(self.bot, "testing", False))
             roles_data = load_roles_template(roles_path)
-            buttons = roles_data.get("buttons", [])
-            if buttons:
-                # Delete the old button message so the new one lands at the bottom
-                old_btn_id = roles_data.get("button_message_id")
-                if old_btn_id:
-                    try:
-                        old_btn_msg = await channel.fetch_message(old_btn_id)
-                        await old_btn_msg.delete()
-                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                        pass
+            all_buttons = roles_data.get("buttons", [])
+
+            # Ensure pinned roles exist in the JSON and in Discord
+            _PINNED_ROLE_DEFS = [
+                {"label": "Overige MU", "style": "secondary"},
+                {"label": "Wachtlijst", "style": "secondary"},
+            ]
+            _secondary_role_id = next(
+                (b.get("secondary_role_id") for b in all_buttons if b.get("secondary_role_id")), None
+            )
+            for pdef in _PINNED_ROLE_DEFS:
+                existing_btn = next((b for b in all_buttons if b.get("label") == pdef["label"]), None)
+                discord_role = None
+                if existing_btn:
+                    # Button entry exists — check if the Discord role still exists
+                    discord_role = channel.guild.get_role(int(existing_btn["role_id"]))
+                if discord_role is None:
+                    # Role missing from Discord — look up by name or create it
+                    discord_role = discord.utils.get(channel.guild.roles, name=pdef["label"])
+                    if discord_role is None:
+                        try:
+                            discord_role = await channel.guild.create_role(
+                                name=pdef["label"],
+                                color=discord.Color.orange(),
+                                mentionable=True,
+                                reason="Automatisch aangemaakt door bot (vaste MU-knop)",
+                            )
+                        except Exception as e:
+                            self.bot.logger.error("Failed to create pinned role %s: %s", pdef["label"], e)
+                            continue
+                    # Update or add the button entry with the (new) role ID
+                    if existing_btn:
+                        existing_btn["role_id"] = discord_role.id
+                    else:
+                        entry = {"label": pdef["label"], "role_id": discord_role.id, "style": pdef["style"], "row": 0}
+                        if _secondary_role_id:
+                            entry["secondary_role_id"] = _secondary_role_id
+                        all_buttons.append(entry)
+            roles_data["buttons"] = all_buttons
+
+            if all_buttons:
+                normal_btns = [b for b in all_buttons if b.get("label") not in _PINNED_LABELS]
+                pinned_btns = [b for b in all_buttons if b.get("label") in _PINNED_LABELS]
+
+                normal_btns.sort(key=lambda b: embed_position.get(b.get("label", ""), 9999))
+
+                # Recalculate row numbers after sort (5 per row).
+                # Use ceiling division so pinned buttons always start on a fresh row,
+                # even when the normal button count is not a multiple of 5.
+                for i, b in enumerate(normal_btns):
+                    b["row"] = i // 5
+                pinned_row = (len(normal_btns) + 4) // 5
+                for b in pinned_btns:
+                    b["row"] = pinned_row
+
+                buttons = normal_btns + pinned_btns
+
+                # Save sorted buttons back to JSON so future reads are consistent
+                roles_data["buttons"] = buttons
+                with open(roles_path, "w", encoding="utf-8") as f:
+                    json.dump(roles_data, f, indent=2, ensure_ascii=False)
 
                 color = int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
                 roles_embed = discord.Embed(
