@@ -348,9 +348,10 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 return 0.0
 
         is_new = prev is None
-        prev_bonus = int(prev.get("bonus") or 0) if prev else 0
-        # Only report when the best available bonus level actually changes
-        changed = is_new or (bonus != prev_bonus)
+        prev_bonus = float(prev.get("bonus") or 0) if prev else 0.0
+        prev_region = (prev.get("region_id") or "") if prev else ""
+        # Report when bonus changes OR when a different region takes the lead
+        changed = is_new or (bonus != prev_bonus) or (region_id != prev_region)
 
         if changed and not is_new:
             duration = self._format_duration(deposit_end_at)
