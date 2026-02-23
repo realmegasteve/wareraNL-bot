@@ -124,6 +124,12 @@ class Database:
             await self._conn.commit()
         except Exception:
             pass  # column already exists
+        # migration: add citizen_name column if missing
+        try:
+            await self._conn.execute("ALTER TABLE citizen_levels ADD COLUMN citizen_name TEXT")
+            await self._conn.commit()
+        except Exception:
+            pass  # column already exists
         await self._conn.commit()
         logger.info("Database initialized at %s", self.path)
 
@@ -252,12 +258,12 @@ class Database:
         )
         await self._conn.commit()
 
-    async def upsert_citizen_level(self, user_id: str, country_id: str, level: int, updated_at: str, skill_mode: str | None = None, last_skills_reset_at: str | None = None) -> None:
+    async def upsert_citizen_level(self, user_id: str, country_id: str, level: int, updated_at: str, skill_mode: str | None = None, last_skills_reset_at: str | None = None, citizen_name: str | None = None) -> None:
         if not self._conn:
             raise RuntimeError("Database not initialized; call setup() first")
         await self._conn.execute(
-            "INSERT OR REPLACE INTO citizen_levels(user_id, country_id, level, skill_mode, last_skills_reset_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)",
-            (user_id, country_id, level, skill_mode, last_skills_reset_at, updated_at),
+            "INSERT OR REPLACE INTO citizen_levels(user_id, country_id, level, skill_mode, last_skills_reset_at, citizen_name, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?)",
+            (user_id, country_id, level, skill_mode, last_skills_reset_at, citizen_name, updated_at),
         )
 
     async def flush_citizen_levels(self) -> None:
@@ -409,6 +415,89 @@ class Database:
                 "no_data": b["no_data"],
             }
         return result, last_updated
+
+
+    async def get_citizens_cooldown_list(
+        self, country_id: str, limit: int = 50
+    ) -> list[dict]:
+        """Return citizens for a country sorted by level DESC with cooldown data.
+
+        Each dict: user_id, citizen_name, level, last_skills_reset_at, days_ago, can_reset
+        """
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        sql = """
+            SELECT user_id, citizen_name, level, last_skills_reset_at
+            FROM citizen_levels
+            WHERE country_id = ?
+            ORDER BY level DESC, user_id
+            LIMIT ?
+        """
+        rows: list[dict] = []
+        async with self._conn.execute(sql, (country_id, limit)) as cur:
+            async for row in cur:
+                uid, name, level, reset_at = row
+                days_ago: float | None = None
+                can_reset = True
+                if reset_at:
+                    try:
+                        ts = datetime.fromisoformat(reset_at.replace("Z", "+00:00"))
+                        days_ago = (now - ts).total_seconds() / 86400
+                        can_reset = days_ago >= 7
+                    except Exception:
+                        pass
+                rows.append({
+                    "user_id": uid,
+                    "citizen_name": name or uid,
+                    "level": level,
+                    "last_skills_reset_at": reset_at,
+                    "days_ago": days_ago,
+                    "can_reset": can_reset,
+                })
+        return rows
+
+    async def find_citizen_cooldown(self, query: str) -> list[dict]:
+        """Search for a citizen by name (partial, case-insensitive) or exact user_id.
+
+        Returns up to 10 matches ordered by level DESC.
+        Each dict: user_id, citizen_name, level, country_id, last_skills_reset_at, days_ago, can_reset
+        """
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        sql = """
+            SELECT user_id, citizen_name, level, country_id, last_skills_reset_at
+            FROM citizen_levels
+            WHERE user_id = ? OR lower(citizen_name) LIKE lower(?)
+            ORDER BY level DESC
+            LIMIT 10
+        """
+        rows: list[dict] = []
+        async with self._conn.execute(sql, (query, f"%{query}%")) as cur:
+            async for row in cur:
+                uid, name, level, country_id, reset_at = row
+                days_ago: float | None = None
+                can_reset = True
+                if reset_at:
+                    try:
+                        ts = datetime.fromisoformat(reset_at.replace("Z", "+00:00"))
+                        days_ago = (now - ts).total_seconds() / 86400
+                        can_reset = days_ago >= 7
+                    except Exception:
+                        pass
+                rows.append({
+                    "user_id": uid,
+                    "citizen_name": name or uid,
+                    "level": level,
+                    "country_id": country_id,
+                    "last_skills_reset_at": reset_at,
+                    "days_ago": days_ago,
+                    "can_reset": can_reset,
+                })
+        return rows
 
 
 __all__ = ["Database"]

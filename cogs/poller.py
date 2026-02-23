@@ -13,36 +13,9 @@ from services.api_client import APIClient
 from services.db import Database
 from services.citizen_cache import CitizenCache
 from services.country_utils import extract_country_list, find_country, country_id as cid_of
+from utils.checks import has_privileged_role
 
 logger = logging.getLogger("discord_bot")
-
-# Role IDs allowed to run privileged commands (in addition to bot owner)
-_PRIVILEGED_ROLE_IDS: set[int] = {
-    1451180288515506258,  # minister_foreign_affairs / ambassadeur
-    1401530996725383178,  # president
-    1401531414553428139,  # vice_president
-    1458527742646816892,  # government
-    1458427087189835776,  # commandant
-}
-
-
-def _has_privileged_role() -> bool:
-    """app_commands check: owner OR one of the privileged roles (bypassed in test mode)."""
-    async def predicate(interaction: discord.Interaction) -> bool:
-        bot = interaction.client
-        # In test mode everyone is allowed
-        if getattr(bot, "testing", False):
-            return True
-        # Bot owner is always allowed
-        app_info = await bot.application_info()
-        if interaction.user.id == app_info.owner.id:
-            return True
-        if interaction.guild and isinstance(interaction.user, discord.Member):
-            user_role_ids = {r.id for r in interaction.user.roles}
-            if user_role_ids & _PRIVILEGED_ROLE_IDS:
-                return True
-        raise app_commands.MissingPermissions(["privileged_role"])
-    return app_commands.check(predicate)
 
 
 class ProductionChecker(commands.Cog, name="production_checker"):
@@ -504,7 +477,6 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 await self._citizen_cache.refresh_country(cid, name)
             except Exception:
                 self.bot.logger.exception("daily_citizen_refresh: error refreshing %s", name)
-            await asyncio.sleep(2)
         self.bot.logger.info("daily_citizen_refresh: complete (%d countries)", total)
 
         if self.bot.testing:
@@ -1316,15 +1288,23 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="skillcooldown", description="Toon cooldownstatistieken per 5-niveaugroep voor een land (of alle).")
-    @app_commands.describe(country="Landcode of naam, of leeg laten voor alle landen samen.")
-    async def skillcooldown(self, ctx: Context, country: str | None = None):
-        """Show average days since last skill reset per 5-level bucket.
+    @app_commands.describe(
+        country="Landcode of naam, of leeg laten voor alle landen samen.",
+        speler="Spelernaam of -ID om op te zoeken.",
+        aantal="Aantal spelers in de lijst (hoogste niveau eerst); vereist een land.",
+    )
+    async def skillcooldown(
+        self, ctx: Context,
+        country: str | None = None,
+        speler: str | None = None,
+        aantal: int | None = None,
+    ):
+        """Skill-reset cooldown: bucket-stats, player list, or single-player lookup.
 
-        A player can reset skills once every 7 days.  This command shows,
-        per level group, how long ago citizens last reset and how many can
-        already reset again.
-
-        Usage: ``/skillcooldown NL``  or  ``/skillcooldown`` (all countries)
+        Modes:
+          /skillcooldown [land]           — overzicht per niveaugroep
+          /skillcooldown land aantal:N    — lijst van N spelers (hoogste niveau eerst)
+          /skillcooldown speler:naam      — zoek een specifieke speler
         """
         if not self._db:
             await ctx.send("Database niet geïnitialiseerd.")
@@ -1332,10 +1312,47 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         if hasattr(ctx, "defer"):
             await ctx.defer()
 
+        colour = self._embed_colour()
+
+        # ── Mode 1: player lookup ─────────────────────────────────────────
+        if speler is not None:
+            try:
+                results = await self._db.find_citizen_cooldown(speler)
+            except Exception as exc:
+                await ctx.send(f"Databasefout: {exc}")
+                return
+            if not results:
+                await ctx.send(f"Geen speler gevonden voor `{speler}`.")
+                return
+            lines: list[str] = []
+            for r in results:
+                name_str = r["citizen_name"]
+                lvl = r["level"] or "?"
+                cid_str = r["country_id"] or "?"
+                if r["can_reset"]:
+                    status = "✅ Kan resetten"
+                elif r["days_ago"] is not None:
+                    remaining = max(0.0, 7 - r["days_ago"])
+                    status = f"⏳ {remaining:.1f}d resterend"
+                else:
+                    status = "✅ Kan resetten"
+                lines.append(f"**{name_str}** (lvl {lvl}, land {cid_str}) — {status}")
+            embed = discord.Embed(
+                title=f"Skill-reset cooldown — {speler}",
+                description="\n".join(lines),
+                colour=colour,
+            )
+            await ctx.send(embed=embed)
+            return
+
+        # ── Resolve country (required for list mode, optional for bucket mode) ──
         country_name = "Alle landen"
         cid: str | None = None
 
-        if country:
+        if country or aantal is not None:
+            if not country:
+                await ctx.send("Geef een land op als je een spelerslijst wilt zien.")
+                return
             if not self._client:
                 await ctx.send("API-client is niet geïnitialiseerd.")
                 return
@@ -1345,11 +1362,69 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             target = find_country(country, country_list)
             if target is None:
                 sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
-                await ctx.send(f"Country `{country}` not found. Sample codes: {sample}\u2026")
+                await ctx.send(f"Land `{country}` niet gevonden. Voorbeeldcodes: {sample}…")
                 return
             cid = cid_of(target)
             country_name = target.get("name", country)
 
+        # ── Mode 2: player list ───────────────────────────────────────────
+        if aantal is not None:
+            limit = max(1, min(aantal, 200))
+            try:
+                players = await self._db.get_citizens_cooldown_list(cid, limit=limit)
+            except Exception as exc:
+                await ctx.send(f"Databasefout: {exc}")
+                return
+            if not players:
+                await ctx.send(
+                    f"Nog geen gecachte data voor **{country_name}**.\n"
+                    f"Run `/peil_burgers {country}` om de cache op te bouwen."
+                )
+                return
+
+            wn = max(max(len(p["citizen_name"]) for p in players), 4)
+            header = f"{'Naam':<{wn}}  {'Lvl':>4}  Status"
+            sep = "─" * (wn + 2 + 4 + 2 + 20)
+            rows_text: list[str] = []
+            for p in players:
+                lvl_str = str(p["level"] or "?")
+                if p["can_reset"]:
+                    status = "✅ kan"
+                elif p["days_ago"] is not None:
+                    remaining = max(0.0, 7 - p["days_ago"])
+                    status = f"⏳ {remaining:.1f}d"
+                else:
+                    status = "✅ kan"
+                rows_text.append(f"{p['citizen_name']:<{wn}}  {lvl_str:>4}  {status}")
+
+            EMBED_LIMIT = 3900
+            chunks: list[list[str]] = []
+            current: list[str] = []
+            for row in rows_text:
+                candidate = "\n".join(current + [row])
+                if len(f"```\n{header}\n{sep}\n{candidate}\n```") > EMBED_LIMIT and current:
+                    chunks.append(current)
+                    current = [row]
+                else:
+                    current.append(row)
+            if current:
+                chunks.append(current)
+
+            total_can = sum(1 for p in players if p["can_reset"])
+            footer = f"{len(players)} spelers  •  {total_can} kunnen resetten"
+
+            for page_idx, chunk in enumerate(chunks):
+                block = f"```\n{header}\n{sep}\n" + "\n".join(chunk) + "\n```"
+                embed = discord.Embed(
+                    title=f"Skill-reset cooldown — {country_name}",
+                    description=block,
+                    colour=colour,
+                )
+                embed.set_footer(text=footer if page_idx == 0 else f"{len(players)} spelers (vervolg)")
+                await ctx.send(embed=embed)
+            return
+
+        # ── Mode 3: bucket stats (default) ───────────────────────────────
         try:
             buckets, last_updated = await self._db.get_skill_reset_cooldown_by_level_buckets(cid)
         except Exception as exc:
@@ -1370,10 +1445,10 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         total_citizens = total_with_data + total_no_data
 
         COOLDOWN_DAYS = 7
-        BAR_W = 10  # bar represents 0–7 days available to reset (0 d = full, 7+ d = empty wait)
+        BAR_W = 10
 
-        header = f"{'Levels':<9}  {'Citizens':>8}  {'Since reset':>11}  {'Can reset':>9}  Cooldown"
-        sep = "\u2500" * (9 + 2 + 8 + 2 + 11 + 2 + 9 + 2 + BAR_W)
+        header = f"{'Niveaus':<9}  {'Burgers':>8}  {'Sinds reset':>11}  {'Kan reset':>9}  Cooldown"
+        sep = "─" * (9 + 2 + 8 + 2 + 11 + 2 + 9 + 2 + BAR_W)
 
         data_rows: list[str] = []
         for b in sorted(buckets):
@@ -1383,65 +1458,58 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             avail = bv["available"]
             avail_pct = avail / total_b * 100 if total_b else 0.0
             b_end = min(b + 4, max_bucket + 4)
-            # bar shows avg cooldown remaining (days left until can reset)
-            # no data → show dashes so it's visually distinct
             if bv["count"] == 0:
-                bar = "\u2500" * BAR_W
+                bar = "─" * BAR_W
             else:
                 avg_remaining = max(0.0, COOLDOWN_DAYS - avg_days)
                 filled = round(avg_remaining / COOLDOWN_DAYS * BAR_W)
-                bar = "\u2588" * filled + "\u2591" * (BAR_W - filled)
-            avg_str = f"{avg_days:.1f}d" if bv["count"] else "n/a"
+                bar = "█" * filled + "░" * (BAR_W - filled)
+            avg_str = f"{avg_days:.1f}d" if bv["count"] else "n.v.t."
             data_rows.append(
-                f" {b:>3}\u2013{b_end:<3}  {total_b:>8}  {avg_str:>11}  {avail:>5} {avail_pct:>3.0f}%  {bar}"
+                f" {b:>3}–{b_end:<3}  {total_b:>8}  {avg_str:>11}  {avail:>5} {avail_pct:>3.0f}%  {bar}"
             )
 
-        colour = self._embed_colour()
         EMBED_LIMIT = 3900
-        chunks: list[list[str]] = []
-        current: list[str] = []
+        chunks_b: list[list[str]] = []
+        current_b: list[str] = []
         for row in data_rows:
-            candidate = "\n".join(current + [row])
-            if len(f"```\n{header}\n{sep}\n{candidate}\n```") > EMBED_LIMIT and current:
-                chunks.append(current)
-                current = [row]
+            candidate = "\n".join(current_b + [row])
+            if len(f"```\n{header}\n{sep}\n{candidate}\n```") > EMBED_LIMIT and current_b:
+                chunks_b.append(current_b)
+                current_b = [row]
             else:
-                current.append(row)
-        if current:
-            chunks.append(current)
+                current_b.append(row)
+        if current_b:
+            chunks_b.append(current_b)
 
-        footer_parts = [f"{total_citizens} citizens total"]
+        footer_parts = [f"{total_citizens} burgers"]
         if last_updated:
-            footer_parts.append(f"Updated: {last_updated[:10]} UTC")
-        footer_text = "  \u2022  ".join(footer_parts)
+            footer_parts.append(f"Bijgewerkt: {last_updated[:10]}")
+        footer_text = "  •  ".join(footer_parts)
 
         page_embeds: list[discord.Embed] = []
-        for page_idx, chunk in enumerate(chunks):
+        for page_idx, chunk in enumerate(chunks_b):
             block = f"```\n{header}\n{sep}\n" + "\n".join(chunk) + "\n```"
             embed = discord.Embed(
-                title=f"Skill-reset cooldown \u2014 {country_name}",
+                title=f"Skill-reset cooldown — {country_name}",
                 description=block,
                 colour=colour,
             )
-            embed.set_footer(text=(
-                footer_text if page_idx == 0
-                else f"{total_citizens} citizens (cont.)"
-            ))
+            embed.set_footer(text=footer_text if page_idx == 0 else f"{total_citizens} burgers (vervolg)")
             page_embeds.append(embed)
 
-        # Overall summary on last embed
         last_embed = page_embeds[-1]
         if total_citizens > 0:
             avail_pct_total = total_available / total_citizens * 100
             if total_with_data > 0:
                 overall_avg = sum(v["avg_days_ago"] * v["count"] for v in buckets.values()) / total_with_data
                 last_embed.add_field(
-                    name="\u23f1\ufe0f Avg days since reset",
-                    value=f"**{overall_avg:.1f}** days",
+                    name="⏱️ Gem. dagen sinds reset",
+                    value=f"**{overall_avg:.1f}** dagen",
                     inline=True,
                 )
             last_embed.add_field(
-                name="\u2705 Can reset now",
+                name="✅ Kan nu resetten",
                 value=f"**{total_available}** ({avail_pct_total:.0f}%)",
                 inline=True,
             )
@@ -1451,7 +1519,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
 
     @commands.hybrid_command(name="peil_burgers", description="Ververs de cache voor burgersniveaus.")
     @app_commands.describe(country="Landcode of naam, of leeg laten voor alle landen")
-    @_has_privileged_role()
+    @has_privileged_role()
     async def poll_citizens(self, ctx: Context, country: str | None = None):
         """Refresh the citizen level cache for one country, or all countries if no argument given.
 

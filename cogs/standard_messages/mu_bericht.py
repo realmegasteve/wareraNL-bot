@@ -16,6 +16,7 @@ from discord.ext.commands import Context
 
 from cogs.standard_messages.generate import GenerateEmbeds
 from cogs.role_selection.roles import RoleToggleView, load_roles_template, mu_roles_path
+from utils.checks import has_privileged_role
 
 def mus_path(testing: bool = False) -> str:
     """Return the correct mus JSON path for the current mode."""
@@ -31,7 +32,7 @@ class MUs(GenerateEmbeds, name="mus"):
         name="mulijst",
         description="Post de MU lijst in het huidige kanaal.",
     )
-    @commands.has_permissions(manage_messages=True)
+    @has_privileged_role()
     async def mulijst(self, context: Context) -> None:
         """
         Post de MU lijst als een reeks embeds.
@@ -190,6 +191,7 @@ class MUs(GenerateEmbeds, name="mus"):
         app_commands.Choice(name="Standaard", value="Standaard"),
     ])
     @app_commands.default_permissions(manage_messages=True)
+    @has_privileged_role()
     async def wijzigmu(
         self,
         interaction: discord.Interaction,

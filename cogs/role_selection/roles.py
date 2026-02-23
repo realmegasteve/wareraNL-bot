@@ -11,6 +11,7 @@ import os
 import discord
 from discord import app_commands
 from discord.ext import commands
+from utils.checks import has_privileged_role
 
 
 TEMPLATES_PATH = "templates"
@@ -183,7 +184,7 @@ class Roles(commands.Cog, name="roles"):
             pass
 
     @app_commands.command(name="muroles", description="Post de MU-rolknoppen.")
-    @app_commands.default_permissions(manage_roles=True)
+    @has_privileged_role()
     async def muroles(self, interaction: discord.Interaction) -> None:
         path = mu_roles_path(getattr(self.bot, "testing", False))
         self.template = load_roles_template(path)
@@ -228,6 +229,7 @@ class Roles(commands.Cog, name="roles"):
             
 
     @app_commands.command(name="muwachtlijst", description="Tel het aantal mensen op de wachtlijst voor MU's.")
+    @has_privileged_role()
     async def muwachtlijst(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if not guild:
@@ -267,7 +269,7 @@ class Roles(commands.Cog, name="roles"):
         app_commands.Choice(name="Eco", value="Eco"),
         app_commands.Choice(name="Standaard", value="Standaard"),
     ])
-    @app_commands.default_permissions(manage_roles=True)
+    @has_privileged_role()
     async def voegmu(
         self,
         interaction: discord.Interaction,
@@ -397,7 +399,7 @@ class Roles(commands.Cog, name="roles"):
         verwijder_rol="Verwijder ook de bijbehorende Discord-rol (standaard: ja)",
     )
     @app_commands.autocomplete(label=_mu_label_autocomplete)
-    @app_commands.default_permissions(manage_roles=True)
+    @has_privileged_role()
     async def verwijdermu(
         self,
         interaction: discord.Interaction,
