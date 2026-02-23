@@ -146,12 +146,34 @@ class MUs(GenerateEmbeds, name="mus"):
         # Use exact embed position as button sort key so button order = embed order
         embed_position: dict[str, int] = {e["title"]: i for i, e in enumerate(embeds_sorted)}
 
+        # Colors per MU type
+        _TYPE_COLORS: dict[str, discord.Color] = {
+            "Elite":     discord.Color.orange(),                # #E67E22
+            "Eco":       discord.Color.from_rgb(46, 204, 113), # emerald green
+            "Standaard": discord.Color.from_rgb(52, 152, 219), # steel blue
+        }
+
+        def _mu_type_str(description: str) -> str | None:
+            """Return the type string (Elite/Eco/Standaard) from an embed description."""
+            m = re.search(r'\*\*(Elite|Eco|Standaard) MU\*\*', description or "")
+            return m.group(1) if m else None
+
+        # One embed per MU (preserves thumbnail), coloured by type, sorted Elite → Eco → Standaard
         for embed_data in embeds_sorted:
+            mu_type_str = _mu_type_str(embed_data.get("description", ""))
+            color = _TYPE_COLORS.get(mu_type_str, discord.Color.greyple())
+            embed = discord.Embed(
+                title=embed_data.get("title", ""),
+                description=embed_data.get("description", ""),
+                color=color,
+            )
+            if "thumbnail" in embed_data:
+                embed.set_thumbnail(url=embed_data["thumbnail"])
             try:
-                msg = await channel.send(embed=self.create_embed_from_data(embed_data))
+                msg = await channel.send(embed=embed)
                 new_ids.append(msg.id)
             except Exception as e:
-                self.bot.logger.error(f"Error sending embed: {e}")
+                self.bot.logger.error(f"Error sending embed for {embed_data.get('title')}: {e}")
 
         # Post role-selection embed with buttons — order mirrors embeds exactly,
         # pinned buttons (Overige MU / Wachtlijst) stay last, row numbers recalculated
