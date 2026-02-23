@@ -53,10 +53,11 @@ class CitizenCache:
             lvl = self._extract_level(obj)
             mode = self._extract_skill_mode(obj)
             reset_at = self._extract_last_skills_reset_at(obj)
+            name = self._extract_name(obj)
             if lvl is not None:
                 await self._db.upsert_citizen_level(
                     uid, country_id, lvl, updated_at,
-                    skill_mode=mode, last_skills_reset_at=reset_at,
+                    skill_mode=mode, last_skills_reset_at=reset_at, citizen_name=name,
                 )
                 recorded += 1
 
@@ -182,6 +183,24 @@ class CitizenCache:
             elif name in war_names:
                 war_pts += pts
         return "eco" if eco_pts >= war_pts else "war"
+
+    @staticmethod
+    def _extract_name(obj: Any) -> str | None:
+        """Pull the player name from a getUserLite result."""
+        if not isinstance(obj, dict):
+            return None
+        for key in ("name", "username", "displayName", "nick"):
+            val = obj.get(key)
+            if isinstance(val, str) and val:
+                return val
+        for sub in ("profile", "user"):
+            sub_obj = obj.get(sub)
+            if isinstance(sub_obj, dict):
+                for key in ("name", "username", "displayName"):
+                    val = sub_obj.get(key)
+                    if isinstance(val, str) and val:
+                        return val
+        return None
 
     @staticmethod
     def _extract_last_skills_reset_at(obj: Any) -> str | None:

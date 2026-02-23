@@ -10,4 +10,5 @@ multidict==6.7.1
 propcache==0.4.1
 python-dotenv==1.2.1
 pytz==2025.2
+requests==2.32.3
 yarl==1.22.0
