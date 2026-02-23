@@ -38,5 +38,7 @@
         "warning": "0xF59E42"
     },
     "ticket_counter": 222,
-    "api_base_url": "https://api2.warera.io/trpc"
+    "api_base_url": "https://api2.warera.io/trpc",
+    "articles_db_path": "database/articles.db",
+    "articles_startup_count": 1
 }

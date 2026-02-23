@@ -12,3 +12,8 @@ python-dotenv==1.2.1
 pytz==2025.2
 requests==2.32.3
 yarl==1.22.0
+feedparser
+httpx
+curl_cffi
+yarl
+requests

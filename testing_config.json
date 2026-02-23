@@ -17,7 +17,7 @@
         "testing-area": 1474452856584011929,
         "military_unit": 1474454484871676058,
         "roles": 1474454434368061513,
-    "articles": 1475511025783537714,
+        "articles": 1475511025783537714,
         "welcome_message": 1401530718223335499,
         "welcome_buttons": 1468223553156546613,
         "verification": 1467976282968166706,
@@ -39,5 +39,7 @@
         "warning": "0xF59E42"
     },
     "ticket_counter": 222,
-    "api_base_url": "https://api2.warera.io/trpc"
+    "api_base_url": "https://api2.warera.io/trpc",
+    "articles_db_path": "database/articles.testing.db",
+    "articles_startup_count": 1
 }
