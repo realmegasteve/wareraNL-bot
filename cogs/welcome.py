@@ -139,7 +139,7 @@ async def create_verification_channel(interaction: discord.Interaction, request_
         embed_color = discord.Color.green()
         request_title = "Verificatieverzoek Nederlanderschap"
     elif request_type == "belgian":
-        channel_name = f"belg-{ticket_id}-{user.name}"
+        channel_name = f"belgian-{ticket_id}-{user.name}"
         role_ids = [roles_cfg.get("border_control")]
         embed_color = discord.Color.green()
         request_title = "Belgian Citizenship Verification Request"
@@ -464,7 +464,7 @@ class Welcome(commands.Cog, name="welcome"):
         channel = interaction.channel
 
         # Verify this is a ticket channel
-        if not channel.name.startswith(("citizen-", "foreigner-", "embassy-", "belg-")):
+        if not channel.name.startswith(("citizen-", "foreigner-", "embassy-", "belgian-")):
             await interaction.response.send_message(
                 "This command can only be used in verification channels.",
                 ephemeral=True
@@ -529,6 +529,7 @@ class Welcome(commands.Cog, name="welcome"):
         if role_to_give:
             try:
                 await member.add_roles(role_to_give)
+                self.bot.logger.info(f"Assigned role {role_to_give.name} to {member.name} for {request_type} verification")
             except discord.Forbidden:
                 await interaction.response.send_message(
                     f"I don't have permission to assign the {role_to_give.name} role. "
@@ -539,6 +540,12 @@ class Welcome(commands.Cog, name="welcome"):
             except discord.HTTPException as e:
                 await interaction.response.send_message(
                     f"Failed to assign role: {e}",
+                    ephemeral=True
+                )
+                return
+            except Exception as e:
+                await interaction.response.send_message(
+                    f"An unexpected error occurred while assigning the role: {e}",
                     ephemeral=True
                 )
                 return
@@ -841,7 +848,7 @@ class Welcome(commands.Cog, name="welcome"):
 
             # Attempt to assign the embassy role based on country
             self.bot.logger.debug(f"Assigning embassy role for country: {country}")
-            embassy_role_id = self.bot.config.get("roles", {}).get("ambassadeur")
+            embassy_role_id = self.bot.config.get("roles", {}).get("buitenlandse_diplomaat")
             embassy_role = interaction.guild.get_role(embassy_role_id) if embassy_role_id else None
 
             try:
