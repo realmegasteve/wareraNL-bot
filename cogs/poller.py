@@ -12,7 +12,7 @@ import asyncio
 from services.api_client import APIClient
 from services.db import Database
 from services.citizen_cache import CitizenCache
-from services.country_utils import extract_country_list, find_country, country_id as cid_of
+from services.country_utils import extract_country_list, find_country, country_id as cid_of, ALL_COUNTRY_NAMES
 from utils.checks import has_privileged_role
 
 logger = logging.getLogger("discord_bot")
@@ -1031,14 +1031,31 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         return {}
 
     # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------ #
+    # Country helpers (defined before commands that reference them)        #
+    # ------------------------------------------------------------------ #
+
+    async def _country_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        """Autocomplete for country parameters: filters ALL_COUNTRY_NAMES."""
+        q = current.strip().lower()
+        return [
+            app_commands.Choice(name=name, value=name)
+            for name in ALL_COUNTRY_NAMES
+            if q in name.lower()
+        ][:25]
+
+    # ------------------------------------------------------------------ #
     # Commands — citizen levels                                            #
     # ------------------------------------------------------------------ #
 
     @commands.hybrid_command(name="niveauverdeling", description="Toon de niveauverdeling van burgers voor een land (of alle).")
     @app_commands.describe(
-        country="Landcode of naam (bijv. NL of Netherlands), of leeg laten voor alle landen.",
+        country="Kies een land, of leeg laten voor alle landen.",
         all_levels="Toon individuele niveaus in plaats van groepen van 5",
     )
+    @app_commands.autocomplete(country=_country_autocomplete)
     async def leveldist(self, ctx: Context, country: str | None = None, all_levels: bool = False):
         """Show the cached level distribution for a country, or all countries if no argument given.
 
@@ -1062,16 +1079,12 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         cid: str | None = None
 
         if country:
-            if not self._client:
-                await ctx.send("API-client is niet geïnitialiseerd.")
-                return
             country_list = await self._fetch_country_list(ctx)
             if country_list is None:
                 return
             target = find_country(country, country_list)
             if target is None:
-                sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
-                await ctx.send(f"Land `{country}` niet gevonden. Voorbeeldcodes: {sample}…")
+                await ctx.send(f"Land `{country}` niet gevonden.")
                 return
             cid = cid_of(target)
             country_name = target.get("name", country)
@@ -1154,7 +1167,8 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="skilldist", description="Toon de eco vs. oorlog vaardighedenverdeling voor een land (of alle).")
-    @app_commands.describe(country="Landcode of naam, of leeg laten voor alle landen samen.")
+    @app_commands.describe(country="Kies een land, of leeg laten voor alle landen samen.")
+    @app_commands.autocomplete(country=_country_autocomplete)
     async def skilldist(self, ctx: Context, country: str | None = None):
         """Show eco vs war distribution per 5-level bucket, followed by the overall totals.
 
@@ -1175,16 +1189,12 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         cid: str | None = None
 
         if country:
-            if not self._client:
-                await ctx.send("API-client is niet geïnitialiseerd.")
-                return
             country_list = await self._fetch_country_list(ctx)
             if country_list is None:
                 return
             target = find_country(country, country_list)
             if target is None:
-                sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
-                await ctx.send(f"Land `{country}` niet gevonden. Voorbeeldcodes: {sample}…")
+                await ctx.send(f"Land `{country}` niet gevonden.")
                 return
             cid = cid_of(target)
             country_name = target.get("name", country)
@@ -1291,10 +1301,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
 
     @commands.hybrid_command(name="skillcooldown", description="Toon cooldownstatistieken per 5-niveaugroep voor een land (of alle).")
     @app_commands.describe(
-        country="Landcode of naam, of leeg laten voor alle landen samen.",
+        country="Kies een land, of leeg laten voor alle landen samen.",
         speler="Spelernaam of -ID om op te zoeken.",
         aantal="Aantal spelers in de lijst (hoogste niveau eerst); vereist een land.",
     )
+    @app_commands.autocomplete(country=_country_autocomplete)
     async def skillcooldown(
         self, ctx: Context,
         country: str | None = None,
@@ -1355,16 +1366,12 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             if not country:
                 await ctx.send("Geef een land op als je een spelerslijst wilt zien.")
                 return
-            if not self._client:
-                await ctx.send("API-client is niet geïnitialiseerd.")
-                return
             country_list = await self._fetch_country_list(ctx)
             if country_list is None:
                 return
             target = find_country(country, country_list)
             if target is None:
-                sample = ", ".join(sorted(str(c.get("code", "")).upper() for c in country_list[:20]))
-                await ctx.send(f"Land `{country}` niet gevonden. Voorbeeldcodes: {sample}…")
+                await ctx.send(f"Land `{country}` niet gevonden.")
                 return
             cid = cid_of(target)
             country_name = target.get("name", country)
@@ -1520,14 +1527,14 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="peil_burgers", description="Ververs de cache voor burgersniveaus.")
-    @app_commands.describe(country="Landcode of naam, of leeg laten voor alle landen")
+    @app_commands.describe(country="Kies een land, of leeg laten voor alle landen.")
+    @app_commands.autocomplete(country=_country_autocomplete)
     @has_privileged_role()
     async def poll_citizens(self, ctx: Context, country: str | None = None):
         """Refresh the citizen level cache for one country, or all countries if no argument given.
 
         Usage: ``/peil_burgers NL``  or  ``/peil_burgers`` (all)
         """
-        self.bot.logger.info("Starting citizen poll")
         if not self._client or not self._db or not self._citizen_cache:
             await ctx.send("Diensten niet geïnitialiseerd.")
             return
