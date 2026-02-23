@@ -664,7 +664,7 @@ class Welcome(commands.Cog, name="welcome"):
         channel = interaction.channel
 
         # Verify this is a ticket channel
-        if not channel.name.startswith(("citizen-", "foreigner-", "embassy-")):
+        if not channel.name.startswith(("citizen-", "foreigner-", "embassy-", "belg-")):
             await interaction.response.send_message(
                 "Dit commando kan alleen worden gebruikt in verificatiekanalen.",
                 ephemeral=True
