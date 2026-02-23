@@ -163,24 +163,22 @@ class RoleToggleView(discord.ui.View):
 class Roles(commands.Cog, name="roles"):
     def __init__(self, bot) -> None:
         self.bot = bot
-        self.template = load_roles_template()
-        # Register persistent views for templates so buttons keep working after restarts.
-        # Helper registers both top-level `buttons` and per-embed `embeds` entries.
-        def _register_template(tmpl: dict, exclusive: bool = True) -> None:
-            if not tmpl:
-                return
-            if tmpl.get("buttons"):
-                self.bot.add_view(RoleToggleView(tmpl["buttons"], exclusive=exclusive))
-            for embed_data in tmpl.get("embeds", []):
+        self.template = load_roles_template(mu_roles_path(getattr(bot, "testing", False)))
+        # Register persistent views for templates so buttons keep working after restarts
+        if self.template.get("embeds"):
+            for embed_data in self.template["embeds"]:
                 if embed_data.get("buttons"):
-                    self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=exclusive))
-
-        _register_template(self.template, exclusive=True)
+                    self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=True))
+        if self.template.get("buttons"):
+            self.bot.add_view(RoleToggleView(self.template["buttons"], exclusive=True))
 
         # Also load and register the general roles template (templates/roles.json)
         try:
             general_template = load_roles_template(f"{TEMPLATES_PATH}/roles.json")
-            _register_template(general_template, exclusive=True)
+            if general_template.get("buttons"):
+                for embed_data in general_template["embeds"]:
+                    if embed_data.get("buttons"):
+                        self.bot.add_view(RoleToggleView(embed_data["buttons"], exclusive=True))
         except Exception:
             # Fail quietly; commands will still load and can post the view manually
             pass
@@ -309,6 +307,8 @@ class Roles(commands.Cog, name="roles"):
         path = mu_roles_path(getattr(self.bot, "testing", False))
         data = load_roles_template(path)
 
+        _PINNED_LABELS = {"Overige MU", "Wachtlijst"}
+
         existing_buttons = data.get("buttons", [])
         secondary_role_id = existing_buttons[0].get("secondary_role_id") if existing_buttons else None
 
@@ -318,8 +318,13 @@ class Roles(commands.Cog, name="roles"):
             )
             return
 
+        # Split pinned (Overige MU / Wachtlijst) from normal buttons so the
+        # new MU is always inserted before them.
+        normal_buttons = [b for b in existing_buttons if b.get("label") not in _PINNED_LABELS]
+        pinned_buttons = [b for b in existing_buttons if b.get("label") in _PINNED_LABELS]
+
         if row is None:
-            row = len(existing_buttons) // 5
+            row = len(normal_buttons) // 5
 
         new_button: dict = {
             "label": label,
@@ -330,7 +335,7 @@ class Roles(commands.Cog, name="roles"):
         if secondary_role_id is not None:
             new_button["secondary_role_id"] = secondary_role_id
 
-        data.setdefault("buttons", []).append(new_button)
+        data["buttons"] = normal_buttons + [new_button] + pinned_buttons
 
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -481,6 +486,24 @@ class Roles(commands.Cog, name="roles"):
             f"✅ **{label}** verwijderd uit de MU-selector.{deleted_role_msg}",
             ephemeral=True,
         )
+
+    @app_commands.command(name="verwijderrol", description="Verwijder een Discord-rol van de server op naam.")
+    @app_commands.describe(rol="De rol om te verwijderen")
+    @has_privileged_role()
+    async def verwijderrol(self, interaction: discord.Interaction, rol: discord.Role) -> None:
+        """Verwijder een Discord-rol van de server."""
+        try:
+            naam = rol.name
+            await rol.delete(reason=f"Verwijderd door /verwijderrol van {interaction.user}")
+            await interaction.response.send_message(
+                f"✅ Rol **{naam}** succesvol verwijderd.", ephemeral=True
+            )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "❌ Ik heb geen toestemming om deze rol te verwijderen.", ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Verwijderen mislukt: {e}", ephemeral=True)
 
     @app_commands.command(name="ambassadeurs", description="Geef de ambassadeur rol.")
     @app_commands.describe(user="De gebruiker aan wie je de ambassadeur rol wilt geven.")
