@@ -332,7 +332,7 @@ class General(commands.Cog, name="general"):
         )
 
     @commands.Cog.listener()
-    async def on_member_leave(self, member: discord.Member) -> None:
+    async def on_member_remove(self, member: discord.Member) -> None:
         self.bot.logger.info(f"{member} has left the server.")
         log_channel_id = self.bot.config.get("channels", {}).get("logs")
         if log_channel_id:
@@ -340,23 +340,56 @@ class General(commands.Cog, name="general"):
             if log_channel:
                 try:
                     log_embed = discord.Embed(
-                        title="Gebruiker heeft de server verlaten",
-                        description=f"**User:** {member.mention if member else 'Unknown'} "
-                                f"({member.name if member else 'Unknown'})\n",  
+                        # title="Gebruiker heeft de server verlaten",
+                        description=f"**{member.mention if member else 'Unknown'} "
+                                f"({member.name if member else 'Unknown'}) heeft de server verlaten**\n",  
                         color=discord.Color.red(),
                         timestamp=discord.datetime.now(pytz.timezone('Europe/Amsterdam'))
                     )
                     if member:
+                        log_embed.set_author(name=member.name, icon_url=member.display_avatar.url)
                         log_embed.set_thumbnail(url=member.display_avatar.url)
                     await log_channel.send(embed=log_embed)
                 except (discord.Forbidden, discord.HTTPException) as e:
+                    self.bot.logger.error(f"Failed to post to log channel: {e}")
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
+        self.bot.logger.info(f"{before} has been updated.")
+        log_channel_id = self.bot.config.get("channels", {}).get("logs")
+        if log_channel_id:
+            log_channel = before.guild.get_channel(log_channel_id)
+            if log_channel:
+                try:
+                    role_changes = []
+                    if before.roles != after.roles:
+                        added_roles = [role for role in after.roles if role not in before.roles]
+                        removed_roles = [role for role in before.roles if role not in after.roles]
+                        if added_roles:
+                            role_changes.append(f":white_check_mark: {', '.join(role.name for role in added_roles)}")
+                        if removed_roles:
+                            role_changes.append(f":no_entry: {', '.join(role.name for role in removed_roles)}")
+                    else:
+                        return
+                    log_embed = discord.Embed(
+                        # title=f"{before.name}",
+                        description=f"**:writing_hand: {before.mention if before else 'Unknown'} is bijgewerkt.** \n"
+                                f"**Rollen:**\n{chr(10).join(role_changes) if role_changes else 'Geen veranderingen in rollen.'}",  
+                        color=discord.Color.orange(),
+                        timestamp=discord.datetime.now(pytz.timezone('Europe/Amsterdam'))
+                    )
+                    log_embed.set_author(name=before.name, icon_url=before.display_avatar.url if before else None)
+                    if before:
+                        log_embed.set_thumbnail(url=before.display_avatar.url)
+                    await log_channel.send(embed=log_embed)
+                except Exception as e:
                     self.bot.logger.error(f"Failed to post to log channel: {e}")
 
     @commands.command(name="testleave")
     @commands.is_owner()
     async def test_leave(self, context: Context) -> None:
         """Test command to simulate a member leaving the server."""
-        await self.on_member_leave(context.author)
+        await self.on_member_remove(context.author)
 
 
 async def setup(bot) -> None:
