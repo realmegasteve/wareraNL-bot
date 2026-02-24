@@ -28,7 +28,8 @@
         "roles_claim": 1456612515902390353,
         "vragen": 1456252976967581877,
         "embassy_category": 1456259898349453433,
-        "reddit": 1474728411338641488
+        "reddit": 1474728411338641488,
+        "articles": 1474728499242860645
     },
     "welcome_message": "# Welcome to the Official Nederland War Era Server!\n\nGreetings, traveler! You have arrived at the gates of Nederland.\n\nPlease select your status below to proceed with verification:",
     "colors": {
@@ -38,5 +39,8 @@
         "warning": "0xF59E42"
     },
     "ticket_counter": 222,
-    "api_base_url": "https://api2.warera.io/trpc"
+    "api_base_url": "https://api2.warera.io/trpc",
+    "articles_db_path": "database/articles.db",
+    "articles_startup_count": 1,
+    "nl_country_id": "6813b6d446e731854c7ac7a0"
 }

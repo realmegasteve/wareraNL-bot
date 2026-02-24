@@ -130,6 +130,15 @@ class Database:
             await self._conn.commit()
         except Exception:
             pass  # column already exists
+        # track which articles have already been posted to Discord
+        await self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS seen_articles (
+                article_id TEXT PRIMARY KEY,
+                seen_at TEXT NOT NULL
+            )
+            """
+        )
         await self._conn.commit()
         logger.info("Database initialized at %s", self.path)
 
@@ -498,6 +507,28 @@ class Database:
                     "can_reset": can_reset,
                 })
         return rows
+
+
+    async def has_seen_article(self, article_id: str) -> bool:
+        """Return True if this article has already been posted to Discord."""
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        async with self._conn.execute(
+            "SELECT 1 FROM seen_articles WHERE article_id = ?", (article_id,)
+        ) as cur:
+            return await cur.fetchone() is not None
+
+    async def mark_article_seen(self, article_id: str) -> None:
+        """Record that this article has been posted so we don't post it again."""
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        await self._conn.execute(
+            "INSERT OR IGNORE INTO seen_articles(article_id, seen_at) VALUES(?, ?)",
+            (article_id, now),
+        )
+        await self._conn.commit()
 
 
 __all__ = ["Database"]

@@ -1,5 +1,39 @@
 """Utilities for normalising country data from the WarEra API."""
 
+# Static list of all 173 countries in WarEra (used for autocomplete).
+ALL_COUNTRY_NAMES: list[str] = [
+    "Afghanistan", "Albania", "Algeria", "Angola", "Argentina", "Armenia",
+    "Australia", "Austria", "Azerbaijan", "Bahamas", "Bangladesh", "Belarus",
+    "Belgium", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia", "Botswana",
+    "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cambodia",
+    "Cameroon", "Canada", "Cape Verde", "Central Africa", "Chad", "Chile",
+    "China", "Colombia", "Congo", "Costa Rica", "Croatia", "Cuba", "Cyprus",
+    "Czechia", "Denmark", "Djibouti", "Dominican Republic", "DR Congo",
+    "East Timor", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea",
+    "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France",
+    "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Greenland",
+    "Guatemala", "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Honduras",
+    "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland",
+    "Israel", "Italy", "Ivory Coast", "Jamaica", "Japan", "Jordan",
+    "Kazakhstan", "Kenya", "Kosovo", "Kuwait", "Kyrgyzstan", "Laos", "Latvia",
+    "Lebanon", "Lesotho", "Liberia", "Libya", "Lithuania", "Luxembourg",
+    "Madagascar", "Malawi", "Malaysia", "Mali", "Malta", "Mauritania",
+    "Mexico", "Moldova", "Mongolia", "Montenegro", "Morocco", "Mozambique",
+    "Myanmar", "Namibia", "Nepal", "Netherlands", "New Zealand", "Nicaragua",
+    "Niger", "Nigeria", "North Korea", "North Macedonia", "Norway", "Oman",
+    "Pakistan", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru",
+    "Philippines", "Poland", "Portugal", "Puerto Rico", "Qatar", "Romania",
+    "Russia", "Rwanda", "Saudi Arabia", "Senegal", "Serbia", "Sierra Leone",
+    "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia",
+    "South Africa", "South Korea", "South Sudan", "Spain", "Sri Lanka",
+    "Sudan", "Suriname", "Sweden", "Switzerland", "Syria",
+    "São Tomé and Príncipe", "Taiwan", "Tajikistan", "Tanzania", "Thailand",
+    "Togo", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan",
+    "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom",
+    "United States", "Uruguay", "Uzbekistan", "Vanuatu", "Venezuela",
+    "Vietnam", "Yemen", "Zambia", "Zimbabwe",
+]
+
 
 def extract_country_list(api_response) -> list[dict]:
     """Normalise the getAllCountries API envelope into a plain list of country dicts."""

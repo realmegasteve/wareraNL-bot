@@ -150,6 +150,8 @@ cython_debug/
 
 # SQLITE database
 *.db
+*.db-shm
+*.db-wal
 
 # Log file
 discord.log
