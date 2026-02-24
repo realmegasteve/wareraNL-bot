@@ -42,5 +42,6 @@
     "api_base_url": "https://api2.warera.io/trpc",
     "articles_db_path": "database/articles.db",
     "articles_startup_count": 1,
-    "nl_country_id": "6813b6d446e731854c7ac7a0"
+    "nl_country_id": "6813b6d446e731854c7ac7a0",
+    "owner_ids": [565626197048819731, 230386541690748929]
 }

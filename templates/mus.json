@@ -17,12 +17,12 @@
         },
         {
             "title": "The Flying Dutchman",
-            "description": "[**Eco MU**](https://app.warera.io/mu/6970dd1ebea7a2698be2e84e)",
+            "description": "[**Standaard MU**](https://app.warera.io/mu/6970dd1ebea7a2698be2e84e)",
             "thumbnail": "https://media.warera.io/avatars/mu/mu-6970dd1ebea7a2698be2e84e-1770831355728-6mctkthl.png"
         },
         {
             "title": "De Nederlandse Bank",
-            "description": "[**Standaard MU**](https://app.warera.io/mu/697de1e370af1f7f8aa169ea)",
+            "description": "[**Eco MU**](https://app.warera.io/mu/697de1e370af1f7f8aa169ea)",
             "thumbnail": "https://media.warera.io/avatars/mu/mu-697de1e370af1f7f8aa169ea-1769857667228-r8i3fnrp.png"
         },
         {
@@ -62,18 +62,18 @@
         }
     ],
     "posted_message_ids": [
-        1475445690363809822,
-        1475445692028686398,
-        1475445693530378290,
-        1475445694885265539,
-        1475445696093094049,
-        1475445697305383014,
-        1475445716561170473,
-        1475445718368915597,
-        1475445719727870014,
-        1475445721191682089,
-        1475445722051772491,
-        1475445723943141456,
-        1475445743090401332
+        1475504351001706559,
+        1475504351802818664,
+        1475504353304379570,
+        1475504354923380837,
+        1475504355892396053,
+        1475504357851271334,
+        1475504377480482989,
+        1475504379023851661,
+        1475504380458307665,
+        1475504381645291520,
+        1475504382606053488,
+        1475504384623509595,
+        1475504404269367479
     ]
 }
