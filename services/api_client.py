@@ -72,10 +72,13 @@ class APIClient:
 				# merge default headers with per-call headers
 				call_kwargs = dict(kwargs)
 				call_headers = dict(self._base_headers)
-				if "headers" in call_kwargs and call_kwargs["headers"]:
-					call_headers.update(call_kwargs.pop("headers"))
+				# Always pop "headers" (may be None from default args) before merging,
+				# so setdefault / direct assignment is never blocked by a None value.
+				per_call_headers = call_kwargs.pop("headers", None)
+				if per_call_headers:
+					call_headers.update(per_call_headers)
 				if call_headers:
-					call_kwargs.setdefault("headers", call_headers)
+					call_kwargs["headers"] = call_headers
 
 				async with self._semaphore:
 					async with self._session.request(method, url, **call_kwargs) as resp:

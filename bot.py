@@ -134,10 +134,22 @@ logger.addHandler(file_handler)
 
 class DiscordBot(commands.Bot):
     def __init__(self, config_path: str | Path | None = None) -> None:
+        # Load config early so owner_ids can be passed to the superclass.
+        _early_config: dict = {}
+        try:
+            _cfg_path = Path(config_path) if config_path else Path("config.json")
+            with _cfg_path.open("r", encoding="utf-8") as _f:
+                _early_config = json.load(_f)
+        except Exception:
+            pass
+        _owner_ids: set[int] = {
+            int(i) for i in _early_config.get("owner_ids", []) if str(i).isdigit()
+        }
         super().__init__(
             command_prefix=commands.when_mentioned_or(os.getenv("PREFIX")),
             intents=intents,
             help_command=None,
+            owner_ids=_owner_ids or None,
         )
         """
         This creates custom bot variables so that we can access these variables in cogs more easily.
