@@ -55,6 +55,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         self._citizen_cache = CitizenCache(self._client, self._db)
 
         self.hourly_production_check.start()
+        self.daily_citizen_refresh.start()
 
     # ------------------------------------------------------------------ #
     # Hourly production poll                                               #
