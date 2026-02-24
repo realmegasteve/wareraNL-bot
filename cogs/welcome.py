@@ -630,6 +630,7 @@ class Welcome(commands.Cog, name="welcome"):
             roles_ch = cfg_channels.get("roles_claim")
             support_ch = cfg_channels.get("vragen")
 
+            refferer_name = interaction.user.nick or "2sa"
             parts = [f"Welkom {member.mention} in WarEra Nederland!\n\n"]
             if handleiding_ch:
                 parts.append(f"Om je op weg te helpen, bekijk onze <#{handleiding_ch}>")
@@ -637,7 +638,7 @@ class Welcome(commands.Cog, name="welcome"):
                 parts.append(f" en claim je rollen in <#{roles_ch}>")
             if support_ch:
                 parts.append(f". Voor vragen kun terecht in <#{support_ch}>")
-            parts.append(f".\n\nAls laatste: je kan op je profiel bij `Settings > Referrals` een referrer opgeven, vul hier het liefst een **Nederlander** in (bijvoorbeeld *{interaction.user.nick}*), dan krijgen jij en de referrer muntjes.")
+            parts.append(f".\n\nAls laatste: je kan op je profiel bij `Settings > Referrals` een referrer opgeven, vul hier het liefst een **Nederlander** in (bijvoorbeeld *{refferer_name}*), dan krijgen jij en de referrer muntjes.")
 
             welcome_embed = discord.Embed(
                 title="Welkom Nederlander! 🇳🇱",
