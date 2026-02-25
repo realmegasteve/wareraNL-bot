@@ -37,7 +37,7 @@ class CitizenCache:
         await self._db.delete_citizens_for_country(country_id)
 
         updated_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        batch_size = 30
+        batch_size = 100
         inputs = [{"userId": uid} for uid in user_ids]
         total_batches = (len(user_ids) + batch_size - 1) // batch_size
 
@@ -45,7 +45,7 @@ class CitizenCache:
             "/user.getUserLite",
             inputs,
             batch_size=batch_size,
-            chunk_sleep=1.0,
+            chunk_sleep=0.5,
         )
 
         recorded = 0
@@ -53,11 +53,13 @@ class CitizenCache:
             lvl = self._extract_level(obj)
             mode = self._extract_skill_mode(obj)
             reset_at = self._extract_last_skills_reset_at(obj)
+            last_login = self._extract_last_login_at(obj)
             name = self._extract_name(obj)
             if lvl is not None:
                 await self._db.upsert_citizen_level(
                     uid, country_id, lvl, updated_at,
-                    skill_mode=mode, last_skills_reset_at=reset_at, citizen_name=name,
+                    skill_mode=mode, last_skills_reset_at=reset_at,
+                    citizen_name=name, last_login_at=last_login,
                 )
                 recorded += 1
 
@@ -217,4 +219,27 @@ class CitizenCache:
         val = dates.get("lastSkillsResetAt")
         if isinstance(val, str) and val:
             return val
+        return None
+
+    @staticmethod
+    def _extract_last_login_at(obj: Any) -> str | None:
+        """Pull the last-login ISO timestamp from a getUserLite result.
+
+        Tries several candidate field names in the ``dates`` sub-object and at
+        the root level, since the exact key varies across API versions.
+        """
+        if not isinstance(obj, dict):
+            return None
+        # Try nested ``dates`` object first (same location as lastSkillsResetAt)
+        dates = obj.get("dates")
+        if isinstance(dates, dict):
+            for key in ("lastLoginAt", "lastSeenAt", "lastOnlineAt", "lastActiveAt", "lastLogin"):
+                val = dates.get(key)
+                if isinstance(val, str) and val:
+                    return val
+        # Fall back to root-level keys
+        for key in ("lastLoginAt", "lastSeenAt", "lastOnlineAt", "lastActiveAt", "lastLogin"):
+            val = obj.get(key)
+            if isinstance(val, str) and val:
+                return val
         return None

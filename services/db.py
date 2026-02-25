@@ -130,6 +130,12 @@ class Database:
             await self._conn.commit()
         except Exception:
             pass  # column already exists
+        # migration: add last_login_at column if missing
+        try:
+            await self._conn.execute("ALTER TABLE citizen_levels ADD COLUMN last_login_at TEXT")
+            await self._conn.commit()
+        except Exception:
+            pass  # column already exists
         # track which articles have already been posted to Discord
         await self._conn.execute(
             """
@@ -138,6 +144,50 @@ class Database:
                 seen_at TEXT NOT NULL
             )
             """
+        )
+        # track which game events have already been posted to Discord
+        await self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS seen_events (
+                event_id TEXT PRIMARY KEY,
+                seen_at TEXT NOT NULL
+            )
+            """
+        )
+        # store war/battle events for historical reference
+        await self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS war_events (
+                event_id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                battle_id TEXT,
+                war_id TEXT,
+                attacker_country_id TEXT,
+                defender_country_id TEXT,
+                region_id TEXT,
+                region_name TEXT,
+                attacker_name TEXT,
+                defender_name TEXT,
+                created_at TEXT,
+                raw_json TEXT
+            )
+            """
+        )
+        # citizen luck score cache (populated by daily_luck_refresh task)
+        await self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS citizen_luck (
+                user_id TEXT PRIMARY KEY,
+                country_id TEXT NOT NULL,
+                citizen_name TEXT,
+                luck_score REAL NOT NULL,
+                opens_count INTEGER NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        await self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_citizen_luck_country ON citizen_luck(country_id)"
         )
         await self._conn.commit()
         logger.info("Database initialized at %s", self.path)
@@ -267,12 +317,12 @@ class Database:
         )
         await self._conn.commit()
 
-    async def upsert_citizen_level(self, user_id: str, country_id: str, level: int, updated_at: str, skill_mode: str | None = None, last_skills_reset_at: str | None = None, citizen_name: str | None = None) -> None:
+    async def upsert_citizen_level(self, user_id: str, country_id: str, level: int, updated_at: str, skill_mode: str | None = None, last_skills_reset_at: str | None = None, citizen_name: str | None = None, last_login_at: str | None = None) -> None:
         if not self._conn:
             raise RuntimeError("Database not initialized; call setup() first")
         await self._conn.execute(
-            "INSERT OR REPLACE INTO citizen_levels(user_id, country_id, level, skill_mode, last_skills_reset_at, citizen_name, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?)",
-            (user_id, country_id, level, skill_mode, last_skills_reset_at, citizen_name, updated_at),
+            "INSERT OR REPLACE INTO citizen_levels(user_id, country_id, level, skill_mode, last_skills_reset_at, citizen_name, last_login_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, country_id, level, skill_mode, last_skills_reset_at, citizen_name, last_login_at, updated_at),
         )
 
     async def flush_citizen_levels(self) -> None:
@@ -288,26 +338,40 @@ class Database:
         await self._conn.execute("DELETE FROM citizen_levels WHERE country_id = ?", (country_id,))
         await self._conn.commit()
 
-    async def get_level_distribution(self, country_id: str | None) -> tuple[dict[int, int], str | None]:
-        """Return (level_counts, last_updated_at) for a country (or all countries when None) from cache."""
+    async def get_level_distribution(
+        self, country_id: str | None
+    ) -> tuple[dict[int, int], dict[int, int], str | None]:
+        """Return (level_counts, active_counts, last_updated_at).
+
+        active_counts counts only citizens whose last_login_at is within the
+        last 24 hours.  If last_login_at data is unavailable the dict is empty.
+        """
         if not self._conn:
             raise RuntimeError("Database not initialized; call setup() first")
+        from datetime import datetime, timedelta, timezone
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(hours=24)
+        ).strftime("%Y-%m-%dT%H:%M:%S")
         counts: dict[int, int] = {}
+        active: dict[int, int] = {}
         last_updated: str | None = None
         if country_id:
-            sql = "SELECT level, updated_at FROM citizen_levels WHERE country_id = ?"
+            sql = "SELECT level, updated_at, last_login_at FROM citizen_levels WHERE country_id = ?"
             params: tuple = (country_id,)
         else:
-            sql = "SELECT level, updated_at FROM citizen_levels"
+            sql = "SELECT level, updated_at, last_login_at FROM citizen_levels"
             params = ()
         async with self._conn.execute(sql, params) as cur:
             async for row in cur:
-                lvl, updated_at = row
+                lvl, updated_at, last_login_at = row
                 if lvl is not None:
-                    counts[int(lvl)] = counts.get(int(lvl), 0) + 1
+                    lvl = int(lvl)
+                    counts[lvl] = counts.get(lvl, 0) + 1
+                    if last_login_at and last_login_at[:19] >= cutoff:
+                        active[lvl] = active.get(lvl, 0) + 1
                 if last_updated is None or updated_at > last_updated:
                     last_updated = updated_at
-        return counts, last_updated
+        return counts, active, last_updated
 
     async def get_skill_mode_distribution(self, country_id: str | None) -> tuple[int, int, int, str | None]:
         """Return (eco_count, war_count, unknown_count, last_updated) for a country or all countries."""
@@ -529,6 +593,147 @@ class Database:
             (article_id, now),
         )
         await self._conn.commit()
+
+    async def has_seen_event(self, event_id: str) -> bool:
+        """Return True if this event has already been posted to Discord."""
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        async with self._conn.execute(
+            "SELECT 1 FROM seen_events WHERE event_id = ?", (event_id,)
+        ) as cur:
+            return await cur.fetchone() is not None
+
+    async def mark_event_seen(self, event_id: str) -> None:
+        """Record that this event has been posted so we don't post it again."""
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        await self._conn.execute(
+            "INSERT OR IGNORE INTO seen_events(event_id, seen_at) VALUES(?, ?)",
+            (event_id, now),
+        )
+        await self._conn.commit()
+
+    async def store_war_event(
+        self,
+        event_id: str,
+        event_type: str,
+        battle_id: Optional[str],
+        war_id: Optional[str],
+        attacker_country_id: Optional[str],
+        defender_country_id: Optional[str],
+        region_id: Optional[str],
+        region_name: Optional[str],
+        attacker_name: Optional[str],
+        defender_name: Optional[str],
+        created_at: Optional[str],
+        raw_json: str,
+    ) -> None:
+        """Store a war/battle event for historical reference."""
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        await self._conn.execute(
+            """
+            INSERT OR REPLACE INTO war_events
+                (event_id, event_type, battle_id, war_id,
+                 attacker_country_id, defender_country_id,
+                 region_id, region_name, attacker_name, defender_name,
+                 created_at, raw_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id, event_type, battle_id, war_id,
+                attacker_country_id, defender_country_id,
+                region_id, region_name, attacker_name, defender_name,
+                created_at, raw_json,
+            ),
+        )
+        await self._conn.commit()
+
+    # ------------------------------------------------------------------ #
+    # Citizen luck ranking                                                 #
+    # ------------------------------------------------------------------ #
+
+    async def upsert_luck_score(
+        self,
+        user_id: str,
+        country_id: str,
+        citizen_name: str | None,
+        luck_score: float,
+        opens_count: int,
+        updated_at: str,
+    ) -> None:
+        """Insert or replace a citizen's luck score (batch — call flush_luck_scores after)."""
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        await self._conn.execute(
+            """
+            INSERT OR REPLACE INTO citizen_luck
+                (user_id, country_id, citizen_name, luck_score, opens_count, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (user_id, country_id, citizen_name, luck_score, opens_count, updated_at),
+        )
+
+    async def flush_luck_scores(self) -> None:
+        """Commit any pending luck score upserts."""
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        await self._conn.commit()
+
+    async def delete_luck_scores_for_country(self, country_id: str) -> None:
+        """Remove all luck scores for a country before a fresh rebuild."""
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        await self._conn.execute(
+            "DELETE FROM citizen_luck WHERE country_id = ?", (country_id,)
+        )
+        await self._conn.commit()
+
+    async def get_luck_ranking(
+        self, country_id: str
+    ) -> list[dict]:
+        """Return all luck entries for a country sorted by luck_score DESC.
+
+        Each dict: user_id, citizen_name, luck_score, opens_count, updated_at.
+        """
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        rows: list[dict] = []
+        async with self._conn.execute(
+            """
+            SELECT user_id, citizen_name, luck_score, opens_count, updated_at
+            FROM citizen_luck
+            WHERE country_id = ?
+            ORDER BY luck_score DESC
+            """,
+            (country_id,),
+        ) as cur:
+            async for row in cur:
+                rows.append({
+                    "user_id": row[0],
+                    "citizen_name": row[1] or row[0],
+                    "luck_score": row[2],
+                    "opens_count": row[3],
+                    "updated_at": row[4],
+                })
+        return rows
+
+    async def get_citizens_for_luck_refresh(
+        self, country_id: str
+    ) -> list[tuple[str, str | None]]:
+        """Return (user_id, citizen_name) for all cached citizens of a country."""
+        if not self._conn:
+            raise RuntimeError("Database not initialized; call setup() first")
+        rows: list[tuple[str, str | None]] = []
+        async with self._conn.execute(
+            "SELECT user_id, citizen_name FROM citizen_levels WHERE country_id = ?",
+            (country_id,),
+        ) as cur:
+            async for row in cur:
+                rows.append((row[0], row[1]))
+        return rows
 
 
 __all__ = ["Database"]

@@ -17,6 +17,49 @@ from utils.checks import has_privileged_role
 
 logger = logging.getLogger("discord_bot")
 
+# ── Luck-scoring helpers (used by daily_luck_refresh) ────────────────────────
+import math as _luck_math
+
+_LUCK_EXPECTED: dict[str, float] = {
+    "mythic": 0.0001, "legendary": 0.0004, "epic": 0.0085,
+    "rare": 0.071,    "uncommon": 0.30,    "common": 0.62,
+}
+_LUCK_WEIGHTS: dict[str, float] = {
+    r: -_luck_math.log2(p) for r, p in _LUCK_EXPECTED.items()
+}
+_LUCK_WEIGHT_TOTAL: float = sum(_LUCK_WEIGHTS.values())
+
+# ── Event-poll helpers (used by event_poll) ───────────────────────────────────
+_BATTLE_URL = "https://app.warera.io/battle/{battle_id}"
+_WAR_URL    = "https://app.warera.io/war/{war_id}"
+
+_EVENT_POLL_TYPES = ["battleOpened", "warDeclared", "peaceMade", "peace_agreement"]
+
+_EVENT_LABELS: dict[str, str] = {
+    "battleOpened":    "⚔️ Slag geopend",
+    "warDeclared":     "🚨 Oorlog verklaard",
+    "peaceMade":       "🕊️ Vrede gesloten",
+    "peace_agreement": "🕊️ Vredesakkoord",
+}
+
+
+def _calc_luck_pct(counts: dict, total: int) -> float:
+    """Weighted luck % score. 0 = average, positive = luckier than average.
+
+    Uses Poisson z-score normalisation: (actual - expected) / sqrt(expected).
+    This keeps scores in a sensible range regardless of sample size or rarity.
+    """
+    if total == 0:
+        return 0.0
+    score = 0.0
+    for rarity, expected_rate in _LUCK_EXPECTED.items():
+        expected_n = total * expected_rate
+        if expected_n <= 0:
+            continue
+        deviation = (counts.get(rarity, 0) - expected_n) / _luck_math.sqrt(expected_n)
+        score += _LUCK_WEIGHTS[rarity] * deviation
+    return score / _LUCK_WEIGHT_TOTAL * 100.0
+
 
 class ProductionChecker(commands.Cog, name="production_checker"):
     def __init__(self, bot) -> None:
@@ -26,6 +69,9 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         self._db: Database | None = None
         self._citizen_cache: CitizenCache | None = None
         self._poll_lock: asyncio.Lock = asyncio.Lock()
+        # Shared lock: only one heavy sweep (luck refresh / manual peil_burgers) may
+        # run at a time.  Concurrent sweeps would saturate the API rate limit.
+        self._heavy_api_lock: asyncio.Lock = asyncio.Lock()
 
     def cog_load(self) -> None:
         asyncio.create_task(self._ensure_services_and_start())
@@ -33,6 +79,8 @@ class ProductionChecker(commands.Cog, name="production_checker"):
     def cog_unload(self) -> None:
         self.hourly_production_check.cancel()
         self.daily_citizen_refresh.cancel()
+        self.daily_luck_refresh.cancel()
+        self.event_poll.cancel()
         if self._client:
             asyncio.create_task(self._client.close())
         if self._db:
@@ -52,10 +100,15 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         await self._client.start()
         self._db = Database(db_path)
         await self._db.setup()
+        # Expose the shared DB on the bot so other cogs (e.g. geluk.py) can reuse
+        # the same connection instead of opening a second one (which causes DB-locked errors).
+        self.bot._ext_db = self._db
         self._citizen_cache = CitizenCache(self._client, self._db)
 
         self.hourly_production_check.start()
         self.daily_citizen_refresh.start()
+        self.daily_luck_refresh.start()
+        self.event_poll.start()
 
     # ------------------------------------------------------------------ #
     # Hourly production poll                                               #
@@ -79,17 +132,23 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             )
         else:
             self.bot.logger.info("[production poll] done in %.1fs — no changes", elapsed)
-            if self.bot.testing:
-                channels = self.config.get("channels", {})
-                cid = channels.get("testing-area") or channels.get("production")
-                if cid:
-                    for guild in self.bot.guilds:
-                        ch = guild.get_channel(cid)
-                        if ch:
-                            try:
-                                await ch.send(f"✅ Productiepeiling klaar ({elapsed:.1f}s) — geen wijzigingen")
-                            except Exception:
-                                pass
+        if self.bot.testing:
+            channels = self.config.get("channels", {})
+            cid = channels.get("testing-area") or channels.get("production")
+            if cid:
+                for guild in self.bot.guilds:
+                    ch = guild.get_channel(cid)
+                    if ch:
+                        try:
+                            m, s = divmod(int(elapsed), 60)
+                            dur = f"{m}m {s}s" if m else f"{elapsed:.1f}s"
+                            if changes:
+                                await ch.send(f"✅ Productiepeiling klaar ({dur}) — {len(changes)} wijziging(en)")
+                            else:
+                                await ch.send(f"✅ Productiepeiling klaar ({dur}) — geen wijzigingen")
+                        except Exception:
+                            pass
+                        break
 
     @hourly_production_check.before_loop
     async def before_hourly_production_check(self):
@@ -439,6 +498,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         if not self._client or not self._db or not self._citizen_cache:
             return
 
+        # Never run on the first tick immediately after startup.
+        if self.daily_citizen_refresh.current_loop == 0:
+            self.bot.logger.info("daily_citizen_refresh: skipping first startup tick")
+            return
+
         from datetime import timezone
         now_utc = datetime.now(timezone.utc)
 
@@ -457,6 +521,8 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             self.bot.logger.exception("daily_citizen_refresh: failed to read last-run state")
 
         self.bot.logger.info("daily_citizen_refresh: starting full country sweep")
+        import time as _time
+        _t0_citizen = _time.monotonic()
         try:
             all_countries = await self._client.get("/country.getAllCountries")
         except Exception:
@@ -490,8 +556,11 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                     ch = guild.get_channel(cid)
                     if ch:
                         try:
+                            _elapsed = _time.monotonic() - _t0_citizen
+                            _m, _s = divmod(int(_elapsed), 60)
+                            _dur = f"{_m}m {_s}s" if _m else f"{_elapsed:.1f}s"
                             await ch.send(
-                                f"✅ Burgersniveau-verversing klaar — {total} landen verwerkt"
+                                f"✅ Burgersniveau-verversing klaar ({_dur}) — {total} landen verwerkt"
                             )
                         except Exception:
                             pass
@@ -500,6 +569,395 @@ class ProductionChecker(commands.Cog, name="production_checker"):
     @daily_citizen_refresh.before_loop
     async def before_daily_citizen_refresh(self):
         await self.bot.wait_until_ready()
+
+    # ------------------------------------------------------------------ #
+    # Daily luck score cache                                               #
+    # ------------------------------------------------------------------ #
+
+    async def _fetch_luck_data(
+        self, user_id: str, item_rarities: dict
+    ) -> tuple[dict[str, int], int]:
+        """Page all openCase transactions for a user. Returns (rarity_counts, total)."""
+        counts: dict[str, int] = {
+            r: 0 for r in _LUCK_EXPECTED
+        }
+        cursor = None
+        while True:
+            payload: dict = {
+                "userId": user_id,
+                "transactionType": "openCase",
+                "limit": 100,
+            }
+            if cursor:
+                payload["cursor"] = cursor
+            try:
+                raw = await self._client.get(
+                    "/transaction.getPaginatedTransactions",
+                    params={"input": json.dumps(payload)},
+                )
+            except Exception:
+                break
+            data = (
+                raw.get("result", {}).get("data", raw)
+                if isinstance(raw, dict) else {}
+            )
+            if isinstance(data, dict):
+                items = (
+                    data.get("items")
+                    or data.get("transactions")
+                    or []
+                )
+                cursor = data.get("nextCursor") or data.get("cursor")
+            elif isinstance(data, list):
+                items = data
+                cursor = None
+            else:
+                break
+            for tx in items:
+                if not isinstance(tx, dict):
+                    continue
+                # skip elite (mythic) case openings
+                if item_rarities.get(tx.get("itemCode", "")) == "mythic":
+                    continue
+                received = tx.get("item") or {}
+                item_code = (
+                    received.get("code") if isinstance(received, dict) else received
+                ) or ""
+                rarity = item_rarities.get(item_code, "common")
+                counts[rarity] = counts.get(rarity, 0) + 1
+            if not cursor or not items:
+                break
+            await asyncio.sleep(0.2)
+        return counts, sum(counts.values())
+
+    @tasks.loop(hours=24)
+    async def daily_luck_refresh(self):
+        """Calculate and cache luck scores for all NL citizens once per day."""
+        if not self._client or not self._db:
+            return
+
+        # Never run on the first tick immediately after startup.
+        if self.daily_luck_refresh.current_loop == 0:
+            self.bot.logger.info("daily_luck_refresh: skipping first startup tick")
+            return
+
+        from datetime import timezone
+        now_utc = datetime.now(timezone.utc)
+        nl_country_id = self.config.get("nl_country_id")
+        if not nl_country_id:
+            return
+
+        # 23-hour cooldown guard
+        try:
+            last_run_str = await self._db.get_poll_state("luck_refresh_last_run")
+            if last_run_str:
+                elapsed_h = (
+                    (now_utc - datetime.fromisoformat(last_run_str)).total_seconds() / 3600
+                )
+                if elapsed_h < 23:
+                    self.bot.logger.info(
+                        "daily_luck_refresh: skipping — last run %.1fh ago (< 23h)", elapsed_h
+                    )
+                    return
+        except Exception:
+            self.bot.logger.exception("daily_luck_refresh: failed to read last-run state")
+
+        self.bot.logger.info("daily_luck_refresh: starting NL luck sweep")
+        import time as _time
+        _t0_luck = _time.monotonic()
+        async with self._heavy_api_lock:
+            await self._daily_luck_refresh_sweep(now_utc, nl_country_id, _t0_luck)
+
+    async def _daily_luck_refresh_sweep(
+        self, now_utc, nl_country_id: str, _t0_luck: float
+    ) -> None:
+        """The heavy part of daily_luck_refresh; must be called with _heavy_api_lock held."""
+        import time as _time
+        try:
+            await self._db.set_poll_state("luck_refresh_last_run", now_utc.isoformat())
+        except Exception:
+            self.bot.logger.exception("daily_luck_refresh: failed to save last-run state")
+
+        # Load item code → rarity map
+        try:
+            raw = await self._client.get(
+                "/gameConfig.getGameConfig", params={"input": "{}"}
+            )
+            data = raw.get("result", {}).get("data", raw) if isinstance(raw, dict) else {}
+            item_rarities: dict[str, str] = {
+                code: item.get("rarity")
+                for code, item in (data.get("items") or {}).items()
+                if item.get("rarity")
+            }
+        except Exception:
+            self.bot.logger.exception("daily_luck_refresh: failed to load item rarities")
+            return
+
+        # Get NL citizens from citizen_levels cache
+        citizens = await self._db.get_citizens_for_luck_refresh(nl_country_id)
+        total = len(citizens)
+        self.bot.logger.info("daily_luck_refresh: processing %d NL citizens", total)
+
+        await self._db.delete_luck_scores_for_country(nl_country_id)
+
+        MIN_OPENS = 20
+        recorded = 0
+        for i, (user_id, citizen_name) in enumerate(citizens):
+            try:
+                counts, total_opens = await self._fetch_luck_data(user_id, item_rarities)
+                if total_opens < MIN_OPENS:
+                    continue  # too few opens for a meaningful score
+                luck_pct = _calc_luck_pct(counts, total_opens)
+                updated_at = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+                await self._db.upsert_luck_score(
+                    user_id, nl_country_id, citizen_name, luck_pct, total_opens, updated_at
+                )
+                recorded += 1
+            except Exception:
+                self.bot.logger.exception(
+                    "daily_luck_refresh: error for user %s", user_id
+                )
+            # Periodic flush + rate limit
+            if (i + 1) % 10 == 0:
+                await self._db.flush_luck_scores()
+                await asyncio.sleep(1.0)
+
+        await self._db.flush_luck_scores()
+        # Store the final ranked count so /geluk always shows a consistent denominator.
+        try:
+            await self._db.set_poll_state("luck_ranking_total", str(recorded))
+        except Exception:
+            self.bot.logger.exception("daily_luck_refresh: failed to save luck_ranking_total")
+        self.bot.logger.info(
+            "daily_luck_refresh: complete — %d/%d citizens scored", recorded, total
+        )
+
+        if self.bot.testing:
+            channels = self.config.get("channels", {})
+            ch_id = channels.get("testing-area") or channels.get("production")
+            if ch_id:
+                for guild in self.bot.guilds:
+                    ch = guild.get_channel(ch_id)
+                    if ch:
+                        try:
+                            _elapsed = _time.monotonic() - _t0_luck
+                            _m, _s = divmod(int(_elapsed), 60)
+                            _dur = f"{_m}m {_s}s" if _m else f"{_elapsed:.1f}s"
+                            await ch.send(
+                                f"✅ Gelukscores verversing klaar ({_dur}) — {recorded}/{total} NL burgers gescoord"
+                            )
+                        except Exception:  # noqa: BLE001
+                            pass
+                        break
+
+    @daily_luck_refresh.before_loop
+    async def before_daily_luck_refresh(self):
+        await self.bot.wait_until_ready()
+
+    # ------------------------------------------------------------------ #
+    # Event poll (battleOpened, warDeclared, peaceMade)                   #
+    # ------------------------------------------------------------------ #
+
+    @tasks.loop(minutes=5)
+    async def event_poll(self) -> None:
+        """Poll for new war/battle events and post them to the events channel."""
+        if not self._client or not self._db:
+            return
+        try:
+            await self._run_event_poll()
+        except Exception:
+            self.bot.logger.exception("event_poll: unexpected error")
+
+    @event_poll.before_loop
+    async def before_event_poll(self) -> None:
+        await self.bot.wait_until_ready()
+
+    async def _run_event_poll(self) -> None:
+        from datetime import timezone
+        channel_id = self.config.get("channels", {}).get("events")
+        if not channel_id:
+            return
+        nl_country_id = self.config.get("nl_country_id")
+        try:
+            resp = await self._client.get(
+                "/event.getEventsPaginated",
+                params={"input": json.dumps({
+                    "limit": 20,
+                    "countryId": nl_country_id,
+                    "eventTypes": _EVENT_POLL_TYPES,
+                })},
+            )
+        except Exception as exc:
+            self.bot.logger.warning("event_poll: failed to fetch events: %s", exc)
+            return
+
+        # Unwrap tRPC envelope
+        data: dict = {}
+        if isinstance(resp, dict):
+            inner = resp.get("result", {})
+            data = inner.get("data", inner) if isinstance(inner, dict) else resp
+        items: list = data.get("items") or data.get("events") or []
+        if not items:
+            return
+
+        # On the very first tick, mark everything seen to avoid spamming on restart.
+        if self.event_poll.current_loop == 0:
+            for event in items:
+                eid = str(event.get("id") or event.get("_id") or "")
+                if eid:
+                    await self._db.mark_event_seen(eid)
+            self.bot.logger.info(
+                "event_poll: startup — marked %d events as seen", len(items)
+            )
+            return
+
+        for event in items:
+            eid = str(event.get("id") or event.get("_id") or "")
+            if not eid or await self._db.has_seen_event(eid):
+                continue
+            await self._post_event(event, eid, channel_id)
+            await self._db.mark_event_seen(eid)
+            await asyncio.sleep(0.5)
+
+    async def _post_event(self, event: dict, event_id: str, channel_id: int) -> None:
+        """Build and post an embed for a single game event and store it in the DB."""
+        from datetime import timezone
+        event_type = str(event.get("type") or event.get("eventType") or "unknown")
+        label = _EVENT_LABELS.get(event_type, f"🔔 {event_type}")
+
+        # Most events embed their payload in a nested "data" key; fall back to root.
+        edata: dict = event.get("data") or event.get("eventData") or event
+
+        battle_id   = str(edata.get("battleId")          or edata.get("battle_id")  or "") or None
+        war_id      = str(edata.get("warId")             or edata.get("war_id")      or "") or None
+        region_id   = str(edata.get("regionId")          or edata.get("region_id")   or "") or None
+        attacker_id = str(edata.get("attackerCountryId") or edata.get("attackerId")  or "") or None
+        defender_id = str(edata.get("defenderCountryId") or edata.get("defenderId")  or "") or None
+
+        region_name:   str | None = None
+        attacker_name: str | None = None
+        defender_name: str | None = None
+
+        # Enrich battleOpened with data from the battle endpoint
+        if event_type == "battleOpened" and battle_id:
+            try:
+                b_resp = await self._client.get(
+                    "/battle.getById",
+                    params={"input": json.dumps({"battleId": battle_id})},
+                )
+                b_data: dict = {}
+                if isinstance(b_resp, dict):
+                    b_inner = b_resp.get("result", {})
+                    b_data = b_inner.get("data", b_inner) if isinstance(b_inner, dict) else b_resp
+                if isinstance(b_data, dict):
+                    region_name = (
+                        b_data.get("regionName")
+                        or (b_data.get("region") or {}).get("name")
+                    )
+                    if not attacker_id:
+                        attacker_id = b_data.get("attackerCountryId") or b_data.get("attackerId")
+                    if not defender_id:
+                        defender_id = b_data.get("defenderCountryId") or b_data.get("defenderId")
+                    if not region_id:
+                        region_id = b_data.get("regionId") or (b_data.get("region") or {}).get("id")
+            except Exception:
+                self.bot.logger.debug("event_poll: could not enrich battle %s", battle_id)
+
+        # Resolve country names
+        for c_id, slot in [(attacker_id, "attacker"), (defender_id, "defender")]:
+            if not c_id:
+                continue
+            try:
+                c_resp = await self._client.get(
+                    "/country.getCountryById",
+                    params={"input": json.dumps({"countryId": c_id})},
+                )
+                c_data: dict = {}
+                if isinstance(c_resp, dict):
+                    c_inner = c_resp.get("result", {})
+                    c_data = c_inner.get("data", c_inner) if isinstance(c_inner, dict) else c_resp
+                name = c_data.get("name") or c_data.get("shortName") if isinstance(c_data, dict) else None
+                if name:
+                    if slot == "attacker":
+                        attacker_name = name
+                    else:
+                        defender_name = name
+            except Exception:
+                self.bot.logger.debug("event_poll: could not resolve country %s", c_id)
+
+        # Timestamp
+        ts_str = event.get("createdAt") or event.get("date") or event.get("timestamp")
+        timestamp: datetime | None = None
+        if ts_str:
+            try:
+                timestamp = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        # Store in DB
+        try:
+            await self._db.store_war_event(
+                event_id=event_id,
+                event_type=event_type,
+                battle_id=battle_id,
+                war_id=war_id,
+                attacker_country_id=attacker_id,
+                defender_country_id=defender_id,
+                region_id=region_id,
+                region_name=region_name,
+                attacker_name=attacker_name,
+                defender_name=defender_name,
+                created_at=ts_str,
+                raw_json=json.dumps(event, ensure_ascii=False),
+            )
+        except Exception:
+            self.bot.logger.exception("event_poll: failed to store event %s", event_id)
+
+        # Build embed
+        atk = attacker_name or attacker_id or "?"
+        dfn = defender_name or defender_id or "?"
+        rgn = region_name   or region_id   or "?"
+
+        if event_type == "battleOpened":
+            color = discord.Color.red()
+            description = f"**{atk}** valt **{dfn}** aan in regio **{rgn}**"
+            url = _BATTLE_URL.format(battle_id=battle_id) if battle_id else None
+        elif event_type == "warDeclared":
+            color = discord.Color.dark_red()
+            description = f"**{atk}** heeft oorlog verklaard aan **{dfn}**"
+            url = _WAR_URL.format(war_id=war_id) if war_id else None
+        else:  # peaceMade / peace_agreement
+            color = discord.Color.green()
+            description = f"**{atk}** en **{dfn}** hebben vrede gesloten"
+            url = _WAR_URL.format(war_id=war_id) if war_id else None
+
+        embed = discord.Embed(
+            title=label,
+            description=description,
+            color=color,
+            timestamp=timestamp or datetime.now(timezone.utc),
+        )
+        embed.set_footer(text="WarEra Events")
+
+        view = discord.ui.View()
+        if url:
+            view.add_item(discord.ui.Button(
+                label="Bekijk in game", url=url, style=discord.ButtonStyle.link,
+            ))
+
+        for guild in self.bot.guilds:
+            channel = guild.get_channel(channel_id)
+            if channel:
+                try:
+                    await channel.send(embed=embed, view=view if url else None)
+                    self.bot.logger.info(
+                        "event_poll: posted %s (id=%s) to guild %s",
+                        event_type, event_id, guild.name,
+                    )
+                except Exception:
+                    self.bot.logger.exception(
+                        "event_poll: failed to post to guild %s", guild.name
+                    )
 
     # ------------------------------------------------------------------ #
     # Commands — production                                                #
@@ -1091,7 +1549,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             country_name = target.get("name", country)
 
         try:
-            level_counts, last_updated = await self._db.get_level_distribution(cid)
+            level_counts, active_counts, last_updated = await self._db.get_level_distribution(cid)
         except Exception as exc:
             await ctx.send(f"Databasefout: {exc}")
             return
@@ -1104,49 +1562,94 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             return
 
         total = sum(level_counts.values())
+        has_active = bool(active_counts)
         colour = self._embed_colour()
+
+        # ── ANSI colour for active portion of bars ──────────────────────
+        _GRN = "\033[32m"   # green
+        _RST = "\033[0m"    # reset
+        BAR_W = 20
+
+        def _make_bar(total_cnt: int, bar_max: int, active_cnt: int = 0) -> str:
+            total_filled = max(1, round(total_cnt / bar_max * BAR_W))
+            if has_active and active_cnt > 0:
+                active_filled = min(max(1, round(active_cnt / bar_max * BAR_W)), total_filled)
+                inactive_filled = total_filled - active_filled
+                return (
+                    _GRN + "█" * active_filled + _RST
+                    + "█" * inactive_filled
+                    + "░" * (BAR_W - total_filled)
+                )
+            return "█" * total_filled + "░" * (BAR_W - total_filled)
 
         if all_levels:
             # Individual level rows
             max_level = max(level_counts)
             bar_max = max(level_counts.values())
-            bar_scale = 20 / bar_max
-            header = f"{'Lvl':>4}  {'Count':>6}  Bar"
-            sep = "─" * 32
-            data_rows = [
-                f"{lvl:>4}  {level_counts[lvl]:>6}  {'█' * max(1, round(level_counts[lvl] * bar_scale))}"
-                for lvl in range(1, max_level + 1)
-                if lvl in level_counts
-            ]
+            if has_active:
+                header = f"{'Lvl':>4}  {'Totaal (actief)':>15}  Bar"
+                sep = "─" * 46
+                data_rows = [
+                    f"{lvl:>4}  {level_counts[lvl]:>5} ({active_counts.get(lvl, 0):>4})  "
+                    f"{_make_bar(level_counts[lvl], bar_max, active_counts.get(lvl, 0))}"
+                    for lvl in range(1, max_level + 1) if lvl in level_counts
+                ]
+            else:
+                header = f"{'Lvl':>4}  {'Count':>6}  Bar"
+                sep = "─" * 32
+                data_rows = [
+                    f"{lvl:>4}  {level_counts[lvl]:>6}  {_make_bar(level_counts[lvl], bar_max)}"
+                    for lvl in range(1, max_level + 1) if lvl in level_counts
+                ]
         else:
             # Bucket rows of 5 levels
             max_level = max(level_counts)
             buckets: dict[int, int] = {}
+            active_buckets: dict[int, int] = {}
             for lvl, cnt in level_counts.items():
                 bucket = ((lvl - 1) // 5) * 5 + 1
                 buckets[bucket] = buckets.get(bucket, 0) + cnt
+            for lvl, cnt in active_counts.items():
+                bucket = ((lvl - 1) // 5) * 5 + 1
+                active_buckets[bucket] = active_buckets.get(bucket, 0) + cnt
             bar_max = max(buckets.values())
-            bar_scale = 20 / bar_max
-            header = f"{'Levels':<9}  {'Count':>6}  Bar"
-            sep = "─" * 34
-            data_rows = [
-                f"{b:>3}–{min(b+4, max_level):<3}  {buckets[b]:>6}  {'█' * max(1, round(buckets[b] * bar_scale))}"
-                for b in sorted(buckets)
-            ]
+            if has_active:
+                header = f"{'Levels':<9}  {'Totaal (actief)':>15}  Bar"
+                sep = "─" * 46
+                data_rows = [
+                    f"{b:>3}–{min(b+4, max_level):<3}  "
+                    f"{buckets[b]:>5} ({active_buckets.get(b, 0):>4})  "
+                    f"{_make_bar(buckets[b], bar_max, active_buckets.get(b, 0))}"
+                    for b in sorted(buckets)
+                ]
+            else:
+                header = f"{'Levels':<9}  {'Count':>6}  Bar"
+                sep = "─" * 34
+                data_rows = [
+                    f"{b:>3}–{min(b+4, max_level):<3}  {buckets[b]:>6}  {_make_bar(buckets[b], bar_max)}"
+                    for b in sorted(buckets)
+                ]
 
         # Send paginated embeds — chunk by character length, not row count
         EMBED_LIMIT = 3900
         label = "All levels" if all_levels else "5-level buckets"
-        footer_text = (
-            f"{total} citizens  •  {label}"
-            + (f"  •  Updated: {last_updated} UTC" if last_updated else "")
-        )
+        footer_parts = [f"{total} burgers  •  {label}"]
+        if has_active:
+            total_active = sum(active_counts.values())
+            footer_parts.append(f"{total_active} actief (< 24h)")
+            footer_parts.append("█ groen = actief")
+        if last_updated:
+            footer_parts.append(f"Bijgewerkt: {last_updated[:16]} UTC")
+        footer_text = "  •  ".join(footer_parts)
+
+        # Use ``ansi`` block when active data is present so green bars render.
+        block_lang = "ansi" if has_active else ""
 
         chunks: list[list[str]] = []
         current: list[str] = []
         for row in data_rows:
             candidate = "\n".join(current + [row])
-            if len(f"```\n{header}\n{sep}\n{candidate}\n```") > EMBED_LIMIT and current:
+            if len(f"```{block_lang}\n{header}\n{sep}\n{candidate}\n```") > EMBED_LIMIT and current:
                 chunks.append(current)
                 current = [row]
             else:
@@ -1155,15 +1658,15 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             chunks.append(current)
 
         for page_idx, chunk in enumerate(chunks):
-            block = f"```\n{header}\n{sep}\n" + "\n".join(chunk) + "\n```"
+            block = f"```{block_lang}\n{header}\n{sep}\n" + "\n".join(chunk) + "\n```"
             embed = discord.Embed(
-                title=f"Level distribution — {country_name}",
+                title=f"Niveauverdeling — {country_name}",
                 description=block,
                 colour=colour,
             )
             embed.set_footer(text=(
                 footer_text if page_idx == 0
-                else f"{total} citizens  •  {label} (cont.)"
+                else f"{total} burgers  •  {label} (vervolg)"
             ))
             await ctx.send(embed=embed)
 
@@ -1557,6 +2060,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
 
         n = len(countries)
         label = f"**{countries[0].get('name', country)}**" if n == 1 else f"**{n}** countries"
+
         status_msg = await ctx.send(f"Burgersniveau-verversing gestart voor {label}…")
 
         import time

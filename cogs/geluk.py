@@ -13,6 +13,53 @@ from services.api_client import APIClient
 
 logger = logging.getLogger("discord_bot")
 
+import math as _luck_math
+
+# ---------------------------------------------------------------------------
+# Luck score calculation (shared with /geluk and used by /gelukranking)
+# ---------------------------------------------------------------------------
+
+_LUCK_WEIGHTS_G: dict[str, float] = {
+    r: -_luck_math.log2(p)
+    for r, p in {
+        "mythic": 0.0001, "legendary": 0.0004, "epic": 0.0085,
+        "rare": 0.071,    "uncommon": 0.30,    "common": 0.62,
+    }.items()
+}
+_LUCK_WEIGHT_TOTAL_G: float = sum(_LUCK_WEIGHTS_G.values())
+
+
+def calc_luck_pct(counts: dict, total: int) -> float:
+    """Weighted luck % score: 0 = average, positive = luckier than average.
+
+    Uses Poisson z-score normalisation: (actual - expected) / sqrt(expected).
+    This keeps scores in a sensible range regardless of sample size or rarity.
+    """
+    if total == 0:
+        return 0.0
+    score = 0.0
+    for rarity, expected_rate in EXPECTED_RATES.items():
+        expected_n = total * expected_rate
+        if expected_n <= 0:
+            continue
+        deviation = (counts.get(rarity, 0) - expected_n) / _luck_math.sqrt(expected_n)
+        score += _LUCK_WEIGHTS_G[rarity] * deviation
+    return score / _LUCK_WEIGHT_TOTAL_G * 100.0
+
+
+def _luck_indicator_overall(luck_pct: float) -> str:
+    """Emoji indicator for an overall luck percentage.
+
+    Calibrated for raw Poisson z-score scale (~±300% range).
+    Being above average for rare loots pushes the score well above +50%.
+    """
+    if luck_pct >= 50:   return "🍀🍀"
+    if luck_pct >= 15:   return "🍀"
+    if luck_pct >= -15:  return "➖"
+    if luck_pct >= -50:  return "💀"
+    return "💀💀"
+
+
 # ---------------------------------------------------------------------------
 # Expected drop rates per rarity (from the game's stated probabilities)
 # ---------------------------------------------------------------------------
@@ -29,13 +76,24 @@ EXPECTED_RATES: dict[str, float] = {
 
 # Display labels (in Dutch / in-game naming)
 RARITY_LABELS: dict[str, str] = {
-    "mythic":    "Mythisch",
-    "legendary": "Legendarisch",
-    "epic":      "Episch",
-    "rare":      "Zeldzaam",
-    "uncommon":  "Ongewoon",
-    "common":    "Gewoon",
+    "mythic":    "Mythic",
+    "legendary": "Legendary",
+    "epic":      "Epic",
+    "rare":      "Rare",
+    "uncommon":  "Uncommon",
+    "common":    "Common",
 }
+
+# ANSI colour codes for each rarity (Discord ansi code block)
+_ANSI_RARITY: dict[str, str] = {
+    "mythic":    "\033[31m",   # red
+    "legendary": "\033[33m",   # yellow
+    "epic":      "\033[35m",   # purple (magenta)
+    "rare":      "\033[34m",   # blue
+    "uncommon":  "\033[32m",   # green
+    "common":    "\033[90m",   # grey
+}
+_ANSI_RST = "\033[0m"
 
 RARITY_COLORS: dict[str, str] = {
     "mythic":    "🔴",
@@ -53,11 +111,17 @@ def _unwrap(resp: dict) -> dict:
     return resp
 
 
-def _luck_indicator(actual_rate: float, expected_rate: float) -> str:
-    """Return a luck emoji based on how far actual deviates from expected."""
-    if expected_rate == 0:
+def _luck_indicator(actual_n: int, expected_n: float) -> str:
+    """Return a luck emoji based on deviation from expected count.
+
+    When expected_n < 1 (rarity so low you weren't statistically due one),
+    getting zero is neutral — only flag positively if you got one anyway.
+    """
+    if expected_n <= 0:
         return ""
-    ratio = actual_rate / expected_rate
+    if expected_n < 1.0:
+        return "🍀🍀" if actual_n >= 1 else "➖"
+    ratio = actual_n / expected_n
     if ratio >= 1.5:
         return "🍀🍀"
     if ratio >= 1.2:
@@ -73,8 +137,8 @@ def _build_luck_table(
     total: int,
     counts: dict[str, int],
 ) -> str:
-    """Build a compact fixed-width text table comparing actual vs expected drops."""
-    header = f"{'Zeldzaamheid':<14} {'Vrw':>6} {'Gkr':>5}  {'Jij%':>6}  Geluk"
+    """Build a compact fixed-width ANSI table comparing actual vs expected drops."""
+    header = f"{'Rarity':<14} {'Exp':>6} {'Got':>5}  {'Your%':>6}  Luck"
     sep = "─" * len(header)
     rows = [header, sep]
     for rarity in RARITY_ORDER:
@@ -82,13 +146,14 @@ def _build_luck_table(
         expected_n = total * expected_rate
         actual_n = counts.get(rarity, 0)
         actual_rate = actual_n / total if total > 0 else 0.0
-        luck = _luck_indicator(actual_rate, expected_rate)
+        luck = _luck_indicator(actual_n, expected_n)
         label = RARITY_LABELS[rarity]
+        color = _ANSI_RARITY[rarity]
         rows.append(
-            f"{label:<14} {expected_n:>6.1f} {actual_n:>5d}  {actual_rate*100:>5.2f}%  {luck}"
+            f"{color}{label:<14}{_ANSI_RST} {expected_n:>6.1f} {actual_n:>5d}  {actual_rate*100:>5.2f}%  {luck}"
         )
     rows.append(sep)
-    rows.append(f"{'Totaal':<14} {total:>6d} {sum(counts.values()):>5d}")
+    rows.append(f"{'Total':<14} {total:>6d} {sum(counts.values()):>5d}")
     return "\n".join(rows)
 
 
@@ -100,6 +165,7 @@ class Geluk(commands.Cog, name="geluk"):
         self.config: dict = getattr(bot, "config", {}) or {}
         self._client: Optional[APIClient] = None
         self._item_rarity_cache: dict[str, str] = {}  # itemCode → rarity
+        self._db: Optional[object] = None  # lazy Database connection for /gelukranking
 
     async def _get_client(self) -> APIClient:
         if self._client is None:
@@ -132,8 +198,8 @@ class Geluk(commands.Cog, name="geluk"):
             logger.warning("Geluk: could not load item rarities: %s", exc)
         return self._item_rarity_cache
 
-    async def _search_user(self, username: str) -> Optional[str]:
-        """Search for a player by username and return their user ID, or None."""
+    async def _search_user(self, username: str) -> list[str]:
+        """Search for a player by username and return up to 5 candidate user IDs."""
         client = await self._get_client()
         try:
             raw = await client.get(
@@ -142,10 +208,10 @@ class Geluk(commands.Cog, name="geluk"):
             )
             data = _unwrap(raw)
             user_ids: list = data.get("userIds", []) if isinstance(data, dict) else []
-            return user_ids[0] if user_ids else None
+            return user_ids[:5]
         except Exception as exc:
             logger.warning("Geluk: search failed for %r: %s", username, exc)
-            return None
+            return []
 
     async def _get_user_profile(self, user_id: str) -> Optional[dict]:
         """Return getUserLite data for a user."""
@@ -159,6 +225,21 @@ class Geluk(commands.Cog, name="geluk"):
         except Exception as exc:
             logger.warning("Geluk: getUserLite failed for %s: %s", user_id, exc)
             return None
+
+    async def _get_db(self):
+        """Return the shared Database instance (from poller), or create one lazily."""
+        if self._db is None:
+            # Prefer the already-open connection held by ProductionChecker to avoid
+            # two separate SQLite connections that would conflict on writes.
+            shared = getattr(self.bot, "_ext_db", None)
+            if shared is not None:
+                self._db = shared
+            else:
+                from services.db import Database
+                db_path = self.config.get("external_db_path", "database/external.db")
+                self._db = Database(db_path)
+                await self._db.setup()
+        return self._db
 
     async def _fetch_all_case_transactions(
         self,
@@ -253,20 +334,48 @@ class Geluk(commands.Cog, name="geluk"):
     async def geluk(self, interaction: discord.Interaction, speler: str) -> None:
         await interaction.response.defer(thinking=True)
 
-        # 1. Find player
-        user_id = await self._search_user(speler)
-        if not user_id:
+        # 1. Find player — exact match first, closest match as fallback
+        import difflib
+        s_low = speler.lower().strip()
+        user_ids = await self._search_user(speler)
+        if not user_ids:
             await interaction.followup.send(
                 f"❌ Speler **{discord.utils.escape_markdown(speler)}** niet gevonden.",
                 ephemeral=True,
             )
             return
 
-        # 2. Get profile
-        profile = await self._get_user_profile(user_id)
-        if not profile:
+        # Fetch all candidate profiles once
+        candidates: list[tuple[str, dict]] = []  # (uid, profile)
+        for uid in user_ids:
+            p = await self._get_user_profile(uid)
+            if p is not None:
+                candidates.append((uid, p))
+
+        # Exact match
+        user_id: Optional[str] = None
+        profile: Optional[dict] = None
+        for uid, p in candidates:
+            if (p.get("username") or "").lower().strip() == s_low:
+                user_id = uid
+                profile = p
+                break
+
+        # Closest match fallback
+        if user_id is None and candidates:
+            best_ratio = -1.0
+            for uid, p in candidates:
+                ratio = difflib.SequenceMatcher(
+                    None, s_low, (p.get("username") or "").lower().strip()
+                ).ratio()
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    user_id = uid
+                    profile = p
+
+        if user_id is None or profile is None:
             await interaction.followup.send(
-                "❌ Kon het profiel van de speler niet ophalen.",
+                f"❌ Speler **{discord.utils.escape_markdown(speler)}** niet gevonden.",
                 ephemeral=True,
             )
             return
@@ -310,16 +419,17 @@ class Geluk(commands.Cog, name="geluk"):
                 "geopende cases."
             )
             if total_cases_opened > 0:
-                lines = ["```"]
-                lines.append(f"{'Zeldzaamheid':<14} {'Verwacht':>8}  {'Kans%':>6}")
-                lines.append("─" * 34)
+                lines = ["```ansi"]
+                lines.append(f"{'Rarity':<14} {'Expected':>8}  {'Chance%':>7}")
+                lines.append("─" * 35)
                 for rarity in RARITY_ORDER:
                     rate = EXPECTED_RATES[rarity]
                     expected_n = total_cases_opened * rate
                     label = RARITY_LABELS[rarity]
-                    lines.append(f"{label:<14} {expected_n:>8.1f}  {rate*100:>5.2f}%")
-                lines.append("─" * 34)
-                lines.append(f"{'Totaal':<14} {total_cases_opened:>8,}")
+                    color = _ANSI_RARITY[rarity]
+                    lines.append(f"{color}{label:<14}{_ANSI_RST} {expected_n:>8.1f}  {rate*100:>6.2f}%")
+                lines.append("─" * 35)
+                lines.append(f"{'Total':<14} {total_cases_opened:>8,}")
                 lines.append("```")
                 embed.add_field(
                     name="Verwachte verdeling",
@@ -341,9 +451,109 @@ class Geluk(commands.Cog, name="geluk"):
             else:
                 analysed_note = f"_{total_counted:,} case openings gevonden_"
                 table = _build_luck_table(total_counted, counts)
-                embed.add_field(name="Geluksanalyse", value=f"{analysed_note}\n```\n{table}\n```", inline=False)
+                embed.add_field(name="Geluksanalyse", value=f"{analysed_note}\n```ansi\n{table}\n```", inline=False)
 
-        embed.set_footer(text="Kansen: mythisch 0.01% • legendarisch 0.04% • episch 0.85% • zeldzaam 7.1% • ongewoon 30% • gewoon 62%")
+        footer_base = "Odds: mythic 0.01% • legendary 0.04% • epic 0.85% • rare 7.1% • uncommon 30% • common 62%"
+
+        # Auto-upsert this player's luck score into the ranking DB if they're
+        # an NL citizen with enough opens. This ensures /geluk always populates
+        # the ranking even if daily_luck_refresh hasn't run yet.
+        _nl_cid = self.config.get("nl_country_id", "")
+        _player_country = (profile.get("country") or "") if profile else ""
+        if can_show_actual and counts and _nl_cid and _player_country == _nl_cid:
+            _tc = sum(counts.values())
+            if _tc >= 20:
+                try:
+                    from datetime import timezone as _tz, datetime as _dt
+                    _luck = calc_luck_pct(counts, _tc)
+                    _now = _dt.now(_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    _db = await self._get_db()
+                    await _db.upsert_luck_score(
+                        user_id, _nl_cid, username, _luck, _tc, _now
+                    )
+                    await _db.flush_luck_scores()
+                    logger.info("Geluk: auto-upserted luck score for %s (%+.1f%%)", username, _luck)
+                except Exception:
+                    logger.exception("Geluk: failed to auto-upsert luck score for %s", user_id)
+
+        # -- Gelukranking section --
+        try:
+            nl_country_id = self.config.get("nl_country_id")
+            if nl_country_id:
+                db = await self._get_db()
+                ranking = await db.get_luck_ranking(nl_country_id)
+                if ranking:
+                    # Use the total from the last completed sweep so the denominator
+                    # stays consistent even while a new sweep is in progress.
+                    try:
+                        _stored = await db.get_poll_state("luck_ranking_total")
+                        rank_total = int(_stored) if _stored else len(ranking)
+                    except Exception:
+                        rank_total = len(ranking)
+                    rank_target_idx: int | None = None
+                    for idx, entry in enumerate(ranking):
+                        if entry["user_id"] == user_id:
+                            rank_target_idx = idx
+                            break
+                    # Name fallback (in case user_id differs between search and DB)
+                    if rank_target_idx is None:
+                        for idx, entry in enumerate(ranking):
+                            if (entry["citizen_name"] or "").lower() == username.lower():
+                                rank_target_idx = idx
+                                break
+
+                    def _rank_row(idx: int, highlight: bool = False) -> str:
+                        e = ranking[idx]
+                        rn = idx + 1
+                        nm = (e["citizen_name"] or "?")[:12]
+                        pct = e["luck_score"]
+                        op = e.get("opens_count", 0)
+                        sign = "+" if pct >= 0 else ""
+                        ind = _luck_indicator_overall(pct)
+                        marker = " ◄" if highlight else ""
+                        return f"#{rn:<4} {nm:<12} {sign}{pct:>6.1f}%  {ind}  {op:>4}{marker}"
+
+                    top5 = list(range(min(5, rank_total)))
+                    bot5 = list(range(max(0, rank_total - 5), rank_total))
+                    ctx_range = (
+                        list(range(max(0, rank_target_idx - 2), min(rank_total, rank_target_idx + 3)))
+                        if rank_target_idx is not None else []
+                    )
+                    ordered = sorted(set(top5 + bot5 + ctx_range))
+
+                    rank_lines: list[str] = [
+                        f"{'rang':<5} {'naam':<12} {'score':>8}   {'geluk':<6} cases",
+                        "─" * 40,
+                    ]
+                    prev = -1
+                    for idx in ordered:
+                        if prev != -1 and idx > prev + 1:
+                            rank_lines.append("    • • •")
+                        rank_lines.append(_rank_row(idx, highlight=(idx == rank_target_idx)))
+                        prev = idx
+
+                    rank_block = "```\n" + "\n".join(rank_lines) + "\n```"
+
+                    updated_at = (ranking[0].get("updated_at") or "")[:10]
+                    if rank_target_idx is not None:
+                        rp = rank_target_idx + 1
+                        rpct = ranking[rank_target_idx]["luck_score"]
+                        rsign = "+" if rpct >= 0 else ""
+                        rank_title = (
+                            f"🏆 Gelukranking NL — "
+                            f"rang **#{rp}/{rank_total}** — "
+                            f"**{rsign}{rpct:.1f}%** {_luck_indicator_overall(rpct)}"
+                        )
+                    else:
+                        rank_title = f"🏆 Gelukranking NL — _{rank_total} spelers, niet in ranking (min. 20 cases)_"
+
+                    embed.add_field(name=rank_title, value=rank_block, inline=False)
+                    if updated_at:
+                        footer_base += f"  •  Ranking bijgewerkt: {updated_at} UTC"
+        except Exception:
+            logger.exception("Geluk: failed to load ranking for /geluk")
+
+        embed.set_footer(text=footer_base)
         await interaction.followup.send(embed=embed)
 
 
