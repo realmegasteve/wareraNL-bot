@@ -197,9 +197,15 @@ class Owner(commands.Cog, name="owner"):
     @commands.is_owner()
     async def pollgeluk(self, context: Context) -> None:
         poller = self.bot.cogs.get("production_checker")
-        if poller is None or not hasattr(poller, "daily_luck_refresh"):
+        if poller is None or not hasattr(poller, "_daily_luck_refresh_sweep"):
             embed = discord.Embed(
                 description="❌ De poller cog is niet geladen.", color=self.color
+            )
+            await context.send(embed=embed)
+            return
+        if poller._heavy_api_lock.locked():
+            embed = discord.Embed(
+                description="⏳ Er loopt al een sweep. Wacht tot die klaar is.", color=self.color
             )
             await context.send(embed=embed)
             return
@@ -207,8 +213,115 @@ class Owner(commands.Cog, name="owner"):
             description="🔄 Gelukscores verversing gestart (cooldown omzeild).",
             color=self.color,
         )
+        status_msg = await context.send(embed=embed)
+
+        async def _run():
+            from datetime import datetime, timezone
+            import time as _time
+            nl_country_id = poller.config.get("nl_country_id")
+            if not nl_country_id:
+                await status_msg.edit(content="❌ `nl_country_id` niet geconfigureerd.", embed=None)
+                return
+            # Check if the citizen cache has been populated
+            try:
+                citizens = await poller._db.get_citizens_for_luck_refresh(nl_country_id)
+                if not citizens:
+                    await status_msg.edit(
+                        content="⚠️ Geen burgers gevonden in de cache. Voer eerst `!peil_burgers` uit om de burgercache te vullen.",
+                        embed=None,
+                    )
+                    return
+                total_citizens = len(citizens)
+            except Exception as exc:
+                await status_msg.edit(content=f"❌ Kon burgercache niet lezen: {exc}", embed=None)
+                return
+
+            now_utc = datetime.now(timezone.utc)
+            _t0 = _time.monotonic()
+            _last_progress_update = 0.0
+
+            def _fmt_dur(seconds: float) -> str:
+                m, s = divmod(int(seconds), 60)
+                return f"{m}m {s}s" if m else f"{seconds:.1f}s"
+
+            async def _progress(processed: int, total: int, recorded: int) -> None:
+                nonlocal _last_progress_update
+                now = _time.monotonic()
+                if processed not in (0, total) and (now - _last_progress_update) < 4.0:
+                    return
+                _last_progress_update = now
+                await status_msg.edit(
+                    content=(
+                        f"🔄 Gelukssweep bezig... burgers: **{processed}/{total_citizens}**"
+                        f" • gescoord: **{recorded}** • duur: **{_fmt_dur(now - _t0)}**"
+                    ),
+                    embed=None,
+                )
+
+            await status_msg.edit(
+                content=f"⏳ Verwerken van **0/{total_citizens}** NL burgers • duur: **0.0s**",
+                embed=None,
+            )
+
+            try:
+                async with poller._heavy_api_lock:
+                    await poller._daily_luck_refresh_sweep(
+                        now_utc,
+                        nl_country_id,
+                        _t0,
+                        progress_cb=_progress,
+                    )
+            except Exception as exc:
+                await status_msg.edit(content=f"❌ Sweep mislukt: {exc}", embed=None)
+                return
+            _elapsed = _time.monotonic() - _t0
+            _m, _s = divmod(int(_elapsed), 60)
+            _dur = f"{_m}m {_s}s" if _m else f"{_elapsed:.1f}s"
+            await status_msg.edit(
+                content=(
+                    f"✅ Gelukssweep voltooid • burgers: **{total_citizens}/{total_citizens}**"
+                    f" • duur: **{_dur}**"
+                ),
+                embed=None,
+            )
+
+        import asyncio
+        asyncio.create_task(_run())
+
+    @commands.command(
+        name="clearluck",
+        description="Leeg de opgeslagen NL gelukscores zodat je opnieuw kunt pollen.",
+    )
+    @commands.is_owner()
+    async def clearluck(self, context: Context) -> None:
+        poller = self.bot.cogs.get("production_checker")
+        if poller is None or not getattr(poller, "_db", None):
+            embed = discord.Embed(
+                description="❌ De poller/DB is niet beschikbaar.", color=self.color
+            )
+            await context.send(embed=embed)
+            return
+
+        nl_country_id = poller.config.get("nl_country_id")
+        if not nl_country_id:
+            await context.send("❌ `nl_country_id` niet geconfigureerd.")
+            return
+
+        try:
+            await poller._db.delete_luck_scores_for_country(nl_country_id)
+            await poller._db.set_poll_state("luck_ranking_total", "0")
+        except Exception as exc:
+            await context.send(f"❌ Wissen van gelukscores mislukt: {exc}")
+            return
+
+        embed = discord.Embed(
+            description=(
+                "🧹 NL gelukscores gewist.\n"
+                "Gebruik nu `!pollgeluk` om de tabel opnieuw te vullen."
+            ),
+            color=self.color,
+        )
         await context.send(embed=embed)
-        poller.daily_luck_refresh.restart()
 
     @commands.hybrid_command(
         name="shutdown",
