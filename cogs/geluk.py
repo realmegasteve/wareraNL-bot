@@ -346,26 +346,19 @@ class Geluk(commands.Cog, name="geluk"):
 
         user_id: Optional[str] = None
         profile: Optional[dict] = None
-        first_profile: Optional[dict] = None
         for uid in user_ids:
             p = await self._get_user_profile(uid)
             if p is None:
                 continue
-            if first_profile is None:
-                first_profile = p
             u_low = (p.get("username") or "").lower().strip()
-            if u_low == s_low or u_low.startswith(s_low):
+            if u_low == s_low:
                 user_id = uid
                 profile = p
                 break
 
         if user_id is None or profile is None:
-            closest_name = (first_profile.get("username") if first_profile else None) or "?"
             await interaction.followup.send(
-                f"❌ Geen exacte match gevonden voor **{discord.utils.escape_markdown(speler)}**.\
-\n"
-                f"Dichtstbijzijnde resultaat: **{discord.utils.escape_markdown(closest_name)}**\n"
-                f"Probeer `/geluk {discord.utils.escape_markdown(closest_name)}` als je die speler bedoelt.",
+                f"❌ Speler **{discord.utils.escape_markdown(speler)}** niet gevonden.",
                 ephemeral=True,
             )
             return
