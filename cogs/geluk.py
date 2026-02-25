@@ -334,7 +334,8 @@ class Geluk(commands.Cog, name="geluk"):
     async def geluk(self, interaction: discord.Interaction, speler: str) -> None:
         await interaction.response.defer(thinking=True)
 
-        # 1. Find player — try each search result until username matches the query
+        # 1. Find player — exact match first, closest match as fallback
+        import difflib
         s_low = speler.lower().strip()
         user_ids = await self._search_user(speler)
         if not user_ids:
@@ -344,17 +345,33 @@ class Geluk(commands.Cog, name="geluk"):
             )
             return
 
-        user_id: Optional[str] = None
-        profile: Optional[dict] = None
+        # Fetch all candidate profiles once
+        candidates: list[tuple[str, dict]] = []  # (uid, profile)
         for uid in user_ids:
             p = await self._get_user_profile(uid)
-            if p is None:
-                continue
-            u_low = (p.get("username") or "").lower().strip()
-            if u_low == s_low:
+            if p is not None:
+                candidates.append((uid, p))
+
+        # Exact match
+        user_id: Optional[str] = None
+        profile: Optional[dict] = None
+        for uid, p in candidates:
+            if (p.get("username") or "").lower().strip() == s_low:
                 user_id = uid
                 profile = p
                 break
+
+        # Closest match fallback
+        if user_id is None and candidates:
+            best_ratio = -1.0
+            for uid, p in candidates:
+                ratio = difflib.SequenceMatcher(
+                    None, s_low, (p.get("username") or "").lower().strip()
+                ).ratio()
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    user_id = uid
+                    profile = p
 
         if user_id is None or profile is None:
             await interaction.followup.send(
