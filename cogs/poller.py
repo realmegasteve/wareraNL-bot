@@ -42,6 +42,14 @@ _EVENT_LABELS: dict[str, str] = {
     "peace_agreement": "🕊️ Vredesakkoord",
 }
 
+_EVENT_TYPE_ALIASES: dict[str, str] = {
+    "battleopened": "battleOpened",
+    "wardeclared": "warDeclared",
+    "peacemade": "peaceMade",
+    "peace_agreement": "peace_agreement",
+    "peaceagreement": "peace_agreement",
+}
+
 
 def _calc_luck_pct(counts: dict, total: int) -> float:
     """Weighted luck % score. 0 = average, positive = luckier than average.
@@ -669,7 +677,7 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             await self._daily_luck_refresh_sweep(now_utc, nl_country_id, _t0_luck)
 
     async def _daily_luck_refresh_sweep(
-        self, now_utc, nl_country_id: str, _t0_luck: float
+        self, now_utc, nl_country_id: str, _t0_luck: float, progress_cb=None
     ) -> None:
         """The heavy part of daily_luck_refresh; must be called with _heavy_api_lock held."""
         import time as _time
@@ -698,6 +706,12 @@ class ProductionChecker(commands.Cog, name="production_checker"):
         total = len(citizens)
         self.bot.logger.info("daily_luck_refresh: processing %d NL citizens", total)
 
+        if progress_cb:
+            try:
+                await progress_cb(0, total, 0)
+            except Exception:
+                self.bot.logger.debug("daily_luck_refresh: progress callback failed at start")
+
         await self._db.delete_luck_scores_for_country(nl_country_id)
 
         MIN_OPENS = 20
@@ -721,6 +735,12 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             if (i + 1) % 10 == 0:
                 await self._db.flush_luck_scores()
                 await asyncio.sleep(1.0)
+
+            if progress_cb and ((i + 1) % 5 == 0 or (i + 1) == total):
+                try:
+                    await progress_cb(i + 1, total, recorded)
+                except Exception:
+                    self.bot.logger.debug("daily_luck_refresh: progress callback failed at %d/%d", i + 1, total)
 
         await self._db.flush_luck_scores()
         # Store the final ranked count so /geluk always shows a consistent denominator.
@@ -772,6 +792,24 @@ class ProductionChecker(commands.Cog, name="production_checker"):
     async def before_event_poll(self) -> None:
         await self.bot.wait_until_ready()
 
+    @staticmethod
+    def _extract_event_type(event: dict) -> str:
+        """Extract and normalize event type from varying API payload shapes."""
+        if not isinstance(event, dict):
+            return "unknown"
+        edata = event.get("data") or event.get("eventData") or {}
+        raw = (
+            event.get("type")
+            or event.get("eventType")
+            or event.get("event_type")
+            or (edata.get("type") if isinstance(edata, dict) else None)
+            or (edata.get("eventType") if isinstance(edata, dict) else None)
+            or "unknown"
+        )
+        normalized = str(raw).strip()
+        key = normalized.lower()
+        return _EVENT_TYPE_ALIASES.get(key, normalized)
+
     async def _run_event_poll(self) -> None:
         from datetime import timezone
         channel_id = self.config.get("channels", {}).get("events")
@@ -815,6 +853,15 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             eid = str(event.get("id") or event.get("_id") or "")
             if not eid or await self._db.has_seen_event(eid):
                 continue
+            event_type = self._extract_event_type(event)
+            if event_type not in _EVENT_LABELS:
+                self.bot.logger.warning(
+                    "event_poll: skipping unsupported event type '%s' (id=%s)",
+                    event_type,
+                    eid,
+                )
+                await self._db.mark_event_seen(eid)
+                continue
             await self._post_event(event, eid, channel_id)
             await self._db.mark_event_seen(eid)
             await asyncio.sleep(0.5)
@@ -822,21 +869,24 @@ class ProductionChecker(commands.Cog, name="production_checker"):
     async def _post_event(self, event: dict, event_id: str, channel_id: int) -> None:
         """Build and post an embed for a single game event and store it in the DB."""
         from datetime import timezone
-        event_type = str(event.get("type") or event.get("eventType") or "unknown")
+        event_type = self._extract_event_type(event)
         label = _EVENT_LABELS.get(event_type, f"🔔 {event_type}")
 
         # Most events embed their payload in a nested "data" key; fall back to root.
         edata: dict = event.get("data") or event.get("eventData") or event
+        attacker_obj = edata.get("attackerCountry") if isinstance(edata.get("attackerCountry"), dict) else {}
+        defender_obj = edata.get("defenderCountry") if isinstance(edata.get("defenderCountry"), dict) else {}
+        region_obj = edata.get("region") if isinstance(edata.get("region"), dict) else {}
 
         battle_id   = str(edata.get("battleId")          or edata.get("battle_id")  or "") or None
         war_id      = str(edata.get("warId")             or edata.get("war_id")      or "") or None
-        region_id   = str(edata.get("regionId")          or edata.get("region_id")   or "") or None
-        attacker_id = str(edata.get("attackerCountryId") or edata.get("attackerId")  or "") or None
-        defender_id = str(edata.get("defenderCountryId") or edata.get("defenderId")  or "") or None
+        region_id   = str(edata.get("regionId")          or edata.get("region_id")   or region_obj.get("id") or "") or None
+        attacker_id = str(edata.get("attackerCountryId") or edata.get("attackerId")  or attacker_obj.get("id") or "") or None
+        defender_id = str(edata.get("defenderCountryId") or edata.get("defenderId")  or defender_obj.get("id") or "") or None
 
-        region_name:   str | None = None
-        attacker_name: str | None = None
-        defender_name: str | None = None
+        region_name:   str | None = region_obj.get("name") if region_obj else None
+        attacker_name: str | None = attacker_obj.get("name") if attacker_obj else None
+        defender_name: str | None = defender_obj.get("name") if defender_obj else None
 
         # Enrich battleOpened with data from the battle endpoint
         if event_type == "battleOpened" and battle_id:
@@ -886,7 +936,12 @@ class ProductionChecker(commands.Cog, name="production_checker"):
                 self.bot.logger.debug("event_poll: could not resolve country %s", c_id)
 
         # Timestamp
-        ts_str = event.get("createdAt") or event.get("date") or event.get("timestamp")
+        ts_str = (
+            event.get("createdAt")
+            or event.get("date")
+            or event.get("timestamp")
+            or (edata.get("createdAt") if isinstance(edata, dict) else None)
+        )
         timestamp: datetime | None = None
         if ts_str:
             try:
@@ -926,10 +981,14 @@ class ProductionChecker(commands.Cog, name="production_checker"):
             color = discord.Color.dark_red()
             description = f"**{atk}** heeft oorlog verklaard aan **{dfn}**"
             url = _WAR_URL.format(war_id=war_id) if war_id else None
-        else:  # peaceMade / peace_agreement
+        elif event_type in ("peaceMade", "peace_agreement"):
             color = discord.Color.green()
             description = f"**{atk}** en **{dfn}** hebben vrede gesloten"
             url = _WAR_URL.format(war_id=war_id) if war_id else None
+        else:
+            color = discord.Color.blurple()
+            description = "Nieuw event ontvangen."
+            url = None
 
         embed = discord.Embed(
             title=label,
