@@ -3,11 +3,11 @@
   "info": {
     "title": "WarEra API",
     "version": "0.17.4-beta",
-    "description": "WarEra tRPC API endpoints. ⚠️ Please notice that every call is in GET and not get."
+    "description": "WarEra tRPC API endpoints. \u26a0\ufe0f Please notice that every call is in GET and not POST."
   },
   "paths": {
     "/company.getById": {
-      "get": {
+      "post": {
         "tags": [
           "company"
         ],
@@ -42,7 +42,7 @@
       }
     },
     "/company.getCompanies": {
-      "get": {
+      "post": {
         "tags": [
           "company"
         ],
@@ -88,7 +88,7 @@
       }
     },
     "/country.getCountryById": {
-      "get": {
+      "post": {
         "tags": [
           "country"
         ],
@@ -123,7 +123,7 @@
       }
     },
     "/country.getAllCountries": {
-      "get": {
+      "post": {
         "tags": [
           "country"
         ],
@@ -140,9 +140,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {
-
-                },
+                "properties": {},
                 "additionalProperties": false
               }
             }
@@ -151,7 +149,7 @@
       }
     },
     "/event.getEventsPaginated": {
-      "get": {
+      "post": {
         "tags": [
           "event"
         ],
@@ -223,7 +221,7 @@
       }
     },
     "/government.getByCountryId": {
-      "get": {
+      "post": {
         "tags": [
           "government"
         ],
@@ -257,7 +255,7 @@
       }
     },
     "/region.getById": {
-      "get": {
+      "post": {
         "tags": [
           "region"
         ],
@@ -292,7 +290,7 @@
       }
     },
     "/region.getRegionsObject": {
-      "get": {
+      "post": {
         "tags": [
           "region"
         ],
@@ -309,9 +307,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {
-
-                },
+                "properties": {},
                 "additionalProperties": false
               }
             }
@@ -320,7 +316,7 @@
       }
     },
     "/battle.getById": {
-      "get": {
+      "post": {
         "tags": [
           "battle"
         ],
@@ -354,7 +350,7 @@
       }
     },
     "/battle.getLiveBattleData": {
-      "get": {
+      "post": {
         "tags": [
           "battle"
         ],
@@ -393,7 +389,7 @@
       }
     },
     "/battle.getBattles": {
-      "get": {
+      "post": {
         "tags": [
           "battle"
         ],
@@ -464,7 +460,7 @@
       }
     },
     "/round.getById": {
-      "get": {
+      "post": {
         "tags": [
           "round"
         ],
@@ -499,7 +495,7 @@
       }
     },
     "/round.getLastHits": {
-      "get": {
+      "post": {
         "tags": [
           "round"
         ],
@@ -534,7 +530,7 @@
       }
     },
     "/battleRanking.getRanking": {
-      "get": {
+      "post": {
         "tags": [
           "battleRanking"
         ],
@@ -607,7 +603,7 @@
       }
     },
     "/itemTrading.getPrices": {
-      "get": {
+      "post": {
         "tags": [
           "itemTrading"
         ],
@@ -624,9 +620,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {
-
-                },
+                "properties": {},
                 "additionalProperties": false
               }
             }
@@ -635,7 +629,7 @@
       }
     },
     "/tradingOrder.getTopOrders": {
-      "get": {
+      "post": {
         "tags": [
           "tradingOrder"
         ],
@@ -677,7 +671,7 @@
       }
     },
     "/itemOffer.getById": {
-      "get": {
+      "post": {
         "tags": [
           "itemOffer"
         ],
@@ -711,7 +705,7 @@
       }
     },
     "/workOffer.getById": {
-      "get": {
+      "post": {
         "tags": [
           "workOffer"
         ],
@@ -745,7 +739,7 @@
       }
     },
     "/workOffer.getWorkOfferByCompanyId": {
-      "get": {
+      "post": {
         "tags": [
           "workOffer"
         ],
@@ -779,7 +773,7 @@
       }
     },
     "/workOffer.getWorkOffersPaginated": {
-      "get": {
+      "post": {
         "tags": [
           "workOffer"
         ],
@@ -832,7 +826,7 @@
       }
     },
     "/ranking.getRanking": {
-      "get": {
+      "post": {
         "tags": [
           "ranking"
         ],
@@ -894,7 +888,7 @@
       }
     },
     "/search.searchAnything": {
-      "get": {
+      "post": {
         "tags": [
           "search"
         ],
@@ -929,7 +923,7 @@
       }
     },
     "/gameConfig.getDates": {
-      "get": {
+      "post": {
         "tags": [
           "gameConfig"
         ],
@@ -946,9 +940,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {
-
-                },
+                "properties": {},
                 "additionalProperties": false
               }
             }
@@ -957,7 +949,7 @@
       }
     },
     "/gameConfig.getGameConfig": {
-      "get": {
+      "post": {
         "tags": [
           "gameConfig"
         ],
@@ -974,9 +966,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {
-
-                },
+                "properties": {},
                 "additionalProperties": false
               }
             }
@@ -985,7 +975,7 @@
       }
     },
     "/user.getUserLite": {
-      "get": {
+      "post": {
         "tags": [
           "user"
         ],
@@ -1019,7 +1009,7 @@
       }
     },
     "/user.getUsersByCountry": {
-      "get": {
+      "post": {
         "tags": [
           "user"
         ],
@@ -1062,7 +1052,7 @@
       }
     },
     "/article.getArticleById": {
-      "get": {
+      "post": {
         "tags": [
           "article"
         ],
@@ -1096,7 +1086,7 @@
       }
     },
     "/article.getArticleLiteById": {
-      "get": {
+      "post": {
         "tags": [
           "article"
         ],
@@ -1130,7 +1120,7 @@
       }
     },
     "/article.getArticlesPaginated": {
-      "get": {
+      "post": {
         "tags": [
           "article"
         ],
@@ -1200,7 +1190,7 @@
       }
     },
     "/mu.getById": {
-      "get": {
+      "post": {
         "tags": [
           "mu"
         ],
@@ -1233,7 +1223,7 @@
       }
     },
     "/mu.getManyPaginated": {
-      "get": {
+      "post": {
         "tags": [
           "mu"
         ],
@@ -1281,7 +1271,7 @@
       }
     },
     "/transaction.getPaginatedTransactions": {
-      "get": {
+      "post": {
         "tags": [
           "transaction"
         ],
@@ -1375,7 +1365,7 @@
       }
     },
     "/upgrade.getUpgradeByTypeAndEntity": {
-      "get": {
+      "post": {
         "tags": [
           "upgrade"
         ],
@@ -1431,7 +1421,7 @@
       }
     },
     "/worker.getWorkers": {
-      "get": {
+      "post": {
         "tags": [
           "worker"
         ],
@@ -1464,7 +1454,7 @@
       }
     },
     "/worker.getTotalWorkersCount": {
-      "get": {
+      "post": {
         "tags": [
           "worker"
         ],

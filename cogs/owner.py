@@ -190,6 +190,26 @@ class Owner(commands.Cog, name="owner"):
         )
         await context.send(embed=embed)
 
+    @commands.command(
+        name="pollgeluk",
+        description="Ververs de gelukscores voor alle NL burgers direct.",
+    )
+    @commands.is_owner()
+    async def pollgeluk(self, context: Context) -> None:
+        poller = self.bot.cogs.get("production_checker")
+        if poller is None or not hasattr(poller, "daily_luck_refresh"):
+            embed = discord.Embed(
+                description="❌ De poller cog is niet geladen.", color=self.color
+            )
+            await context.send(embed=embed)
+            return
+        embed = discord.Embed(
+            description="🔄 Gelukscores verversing gestart (cooldown omzeild).",
+            color=self.color,
+        )
+        await context.send(embed=embed)
+        poller.daily_luck_refresh.restart()
+
     @commands.hybrid_command(
         name="shutdown",
         description="Zet de bot uit.",
