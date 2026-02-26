@@ -23,10 +23,9 @@
 
     {
       "title": "Bot kanalen",
-      "description": "Kies met onderstaande knoppen je toegang tot de bot kanalen.\n\n**WarEra Bot**: Voor allerlei in-game informatie.\n**Rob Jetten**: Voor handige economische tools.\n**Rijksoverheid**: Voor production bonus veranderingen.",
+      "description": "Kies met onderstaande knoppen je toegang tot de bot kanalen.\n\n**Bot-commands**: Voor toegang tot het bot-commands kanaal voor handige tools.\n**Rijksoverheid**: Voor production bonus veranderingen.",
       "buttons": [
-        { "label": "WarEra Bot", "role_id": 1474460691468652584, "style": "primary", "row": 0 },
-        { "label": "Rob Jetten", "role_id": 1474460775237030020, "style": "primary", "row": 0 },
+        { "label": "Bot-commands", "role_id": 1474460775237030020, "style": "primary", "row": 0 },
         { "label": "Rijksoverheid", "role_id": 1474460833030340779, "style": "primary", "row": 0 }
       ]
     },

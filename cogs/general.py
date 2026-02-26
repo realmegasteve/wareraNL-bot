@@ -51,6 +51,23 @@ class General(commands.Cog, name="general"):
         self.color = int(self.bot.config.get("colors", {}).get("primary", "0x154273"), 16)
         self.config = getattr(self.bot, "config", {}) or {}
 
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message) -> None:
+        """
+        Suppress embeds for messages that contain links to app.warera.io.
+        Requires MANAGE_MESSAGES permission for the bot in the channel.
+        """
+        if message.author.bot:
+            return
+        content = message.content or ""
+        self.bot.logger.debug(f"Received message: {content} from {message.author} in {getattr(message.channel, 'id', 'DM')}")
+        if "app.warera.io" not in content:
+            return
+        try:
+            await message.edit(suppress=True)
+            self.bot.logger.info(f"Suppressed embeds for message {message.id} in {getattr(message.channel, 'id', 'DM')}")
+        except (discord.Forbidden, discord.HTTPException) as e:
+            self.bot.logger.error(f"Failed to suppress embeds for message {message.id}: {e}")
 
     # Message context menu command
     async def remove_spoilers(
