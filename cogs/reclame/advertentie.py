@@ -12,10 +12,19 @@ from discord.ext.commands import Context
 from discord import ui
 import discord
 
+selectedAdvertentie: int
+kanaalenLijst = {
+0:"",
+1:"",
+2:"",
+3:""
+}
 
-MU_Advertentie = client.get_channel()
+class advertentieSelectClass(discord.ui.Select, custom_id="advertentieSelect", options=["MU", "Market", "Company", "Party"]):
 
-class AdvertentieSelectClass(discord.ui.Select, custom_id="advertentieSelect", options=["MU", "Market", "Company", "Party"]):
+
+    async def interaction_check(self ,interaction: discord.Interaction):
+        await interaction.response.send_modal(advertentieModalClass())
 
 
 class advertentieModalClass(ui.modal, title="Maak een advertentie", custom_id="advertentieModal"):
@@ -31,12 +40,63 @@ class advertentieModalClass(ui.modal, title="Maak een advertentie", custom_id="a
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        message.channel.send
-        await interaction.response.send_message()
+
+        await messagesubmit(self,)
 
 
 
+async def messagesubmit(self, interaction: discord.Interaction):
+    global selectedAdvertentie
+    selectedAdvertentie = advertentieSelectClass().id
 
+    if selectedAdvertentie == 0:
+        modal = advertentieModalClass
+
+        modal.add_item(discord.ui.TextInput(
+            label="Naam van de MU"
+        ))
+        modal.add_item(discord.ui.TextInput(
+            label="Nodig om de MU te joinen"
+        ))
+
+    elif selectedAdvertentie == 1:
+        modal = advertentieModalClass
+
+        modal.add_item(discord.ui.TextInput(
+            label="Product naam"
+        ))
+        modal.add_item(discord.ui.TextInput(
+            label="Product prijs"
+        ))
+
+    elif selectedAdvertentie == 2:
+        modal = advertentieModalClass
+
+        modal.add_item(discord.ui.TextInput(
+            label="Bedrijf naam"
+        ))
+        modal.add_item(discord.ui.TextInput(
+            label="Product dat gemaakt wordt"
+        ))
+        modal.add_item(discord.ui.TextInput(
+            label="Betaaling"
+        ))
+        modal.add_item(discord.ui.TextInput(
+            label="Hoeveel"
+        ))
+
+    elif selectedAdvertentie == 3:
+        modal = advertentieModalClass
+
+        modal.add_item(discord.ui.TextInput(
+            label="Naam van de MU"
+        ))
+        modal.add_item(discord.ui.TextInput(
+            label="Nodig om de MU te joinen"
+        ))
+    await interaction.response.send_modal(advertentieModalClass())
+    channel = discord.Client.get_channel()
+    await channel.send("test Response : this is sent so the developers know this command is active if this is sent then contact the developers to remove it")
 
 
 
@@ -54,7 +114,7 @@ class Advertentie(commands.Cog, name="advertentie"):
     )
     async def advertentie(self, interaction: discord.Interaction) -> None:
 
-        await interaction.response.send_modal(advertentieModalClass())
+
         """
         This is a testing command that does nothing.
 
