@@ -20,14 +20,16 @@ kanaalenLijst = {
 3:""
 }
 
-class advertentieSelectClass(discord.ui.Select, custom_id="advertentieSelect", options=["MU", "Market", "Company", "Party"]):
+class advertentieSelectClass(ui.Select, ):
+    custom_id = "advertentieSelect"
+    options = ["MU", "Market", "Company", "Party"]
+    pass
 
 
-    async def interaction_check(self ,interaction: discord.Interaction):
-        await interaction.response.send_modal(advertentieModalClass())
+class advertentieModalClass(ui.modal):
+    title = "Maak een advertentie"
+    custom_id = "advertentieModal"
 
-
-class advertentieModalClass(ui.modal, title="Maak een advertentie", custom_id="advertentieModal"):
     advertentieType = ui.TextInput(
         label="advertentie type: (MU, Market, Company, Party)"
     )
